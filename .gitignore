@@ -1,0 +1,4 @@
+briefing/dist/
+briefing/node_modules/
+.DS_Store
+*.log

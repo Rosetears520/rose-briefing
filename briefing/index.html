@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rose Briefing</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Rose Briefing</p>
+        <h1>AI 资讯静态搜索站</h1>
+        <p class="subtitle">聚合 BestBlogs 与 ai-news-aggregator，部署在 GitHub Pages，自己搜索自己看。</p>
+      </div>
+      <div class="hero-card" aria-live="polite">
+        <span id="item-count">--</span>
+        <small>条资讯</small>
+        <small id="generated-at">加载中</small>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="controls" aria-label="搜索和过滤">
+        <label class="search-box">
+          <span>搜索</span>
+          <input id="search" type="search" placeholder="关键词、来源、标签…" autocomplete="off" />
+        </label>
+        <label>
+          <span>来源</span>
+          <select id="source-filter">
+            <option value="all">全部来源</option>
+          </select>
+        </label>
+        <label>
+          <span>排序</span>
+          <select id="sort-order">
+            <option value="newest">最新优先</option>
+            <option value="score">BestBlogs 分数优先</option>
+            <option value="source">来源名称</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="status" id="status" aria-live="polite">正在加载数据…</section>
+      <section class="cards" id="cards" aria-label="资讯列表"></section>
+    </main>
+
+    <template id="card-template">
+      <article class="card">
+        <div class="card-meta"></div>
+        <h2></h2>
+        <p class="summary"></p>
+        <div class="tags"></div>
+        <a class="read-link" target="_blank" rel="noopener noreferrer">打开原文</a>
+      </article>
+    </template>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
