@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 
-const required = [
+const REQUIRED_FILES = [
   "index.html",
   "styles.css",
   "app.js",
@@ -16,45 +16,83 @@ const required = [
   "dist/data/items.json"
 ];
 
-for (const relativePath of required) {
+const ITEM_KEYS = [
+  "id",
+  "title",
+  "url",
+  "publishedAt",
+  "summary",
+  "score",
+  "family",
+  "channel",
+  "publisher",
+  "collection",
+  "topic",
+  "language",
+  "originType"
+];
+
+const LEGACY_KEYS = ["sourceFamily", "sourceName", "siteName", "tags"];
+const REQUIRED_FAMILIES = ["curated", "aggregator", "community", "official"];
+const ALLOWED_FAMILIES = new Set(REQUIRED_FAMILIES);
+const ALLOWED_CHANNELS = new Set(["curated-rss", "official-rss", "official-social", "community-social", "aggregator-json"]);
+const ALLOWED_CHANNELS_BY_FAMILY = new Map([
+  ["curated", new Set(["curated-rss"])],
+  ["aggregator", new Set(["aggregator-json"])],
+  ["community", new Set(["community-social"])],
+  ["official", new Set(["official-rss", "official-social"])]
+]);
+const REQUIRED_SOURCE_NAMES = ["BestBlogs", "ai-news-aggregator", "X/Twitter via SuYxh OPML", "Hugging Face Blog"];
+const REQUIRED_OFFICIAL_RSS_COLLECTIONS = ["Hugging Face Blog"];
+
+for (const relativePath of REQUIRED_FILES) {
   await access(path.join(rootDir, relativePath));
 }
 
 const payload = JSON.parse(await readFile(path.join(rootDir, "data/items.json"), "utf8"));
 if (!Array.isArray(payload.items)) throw new Error("data/items.json must contain an items array");
+if (!Array.isArray(payload.sources)) throw new Error("data/items.json must contain a sources array");
 if (payload.items.length === 0) throw new Error("data/items.json has no items");
 if (payload.items.length < 1000) throw new Error(`Expected expanded data set, got only ${payload.items.length} items`);
 
-const sourceFamilies = new Set(payload.items.map((item) => item.sourceFamily));
-for (const expected of ["BestBlogs", "ai-news-aggregator", "X/Twitter", "Official"]) {
-  if (!sourceFamilies.has(expected)) throw new Error(`Missing expected source family: ${expected}`);
+const sourceNames = new Set(payload.sources.map((source) => source?.name).filter(Boolean));
+for (const expected of REQUIRED_SOURCE_NAMES) {
+  if (!sourceNames.has(expected)) throw new Error(`Missing required source entry: ${expected}`);
 }
 
-const xItems = payload.items.filter((item) => item.sourceFamily === "X/Twitter");
-if (xItems.length < 50) throw new Error(`Expected X/Twitter items, got only ${xItems.length}`);
+const families = new Set(payload.items.map((item) => item.family));
+for (const expected of REQUIRED_FAMILIES) {
+  if (!families.has(expected)) throw new Error(`Missing expected family: ${expected}`);
+}
 
-const officialItems = payload.items.filter((item) => item.sourceFamily === "Official");
-if (officialItems.length < 50) throw new Error(`Expected Official items, got only ${officialItems.length}`);
-const officialRssItems = officialItems.filter((item) => officialChannel(item) === "official-rss");
-if (officialRssItems.length < 20) throw new Error(`Expected Official RSS items, got only ${officialRssItems.length}`);
-const officialRssFeeds = new Set(officialRssItems.map((item) => item.sourceName).filter(Boolean));
-if (officialRssFeeds.size < 3) throw new Error(`Expected at least 3 Official RSS feeds, got ${officialRssFeeds.size}`);
-const officialXItems = officialItems.filter((item) => officialChannel(item) === "official-x");
-if (officialXItems.length < 50) throw new Error(`Expected Official X items, got only ${officialXItems.length}`);
-for (const item of officialXItems) {
-  if (!isOfficialXPostUrl(item.url, item.sourceName)) {
-    throw new Error(`Official X item URL does not match source handle: ${item.sourceName} -> ${item.url}`);
+const communityItems = payload.items.filter((item) => item.family === "community");
+if (communityItems.length < 50) throw new Error(`Expected community items, got only ${communityItems.length}`);
+
+const officialItems = payload.items.filter((item) => item.family === "official");
+if (officialItems.length < 50) throw new Error(`Expected official items, got only ${officialItems.length}`);
+const officialRssItems = officialItems.filter((item) => item.channel === "official-rss");
+if (officialRssItems.length < 20) throw new Error(`Expected official RSS items, got only ${officialRssItems.length}`);
+const officialRssFeeds = new Set(officialRssItems.map((item) => item.collection).filter(Boolean));
+if (officialRssFeeds.size < 3) throw new Error(`Expected at least 3 official RSS feeds, got ${officialRssFeeds.size}`);
+for (const expected of REQUIRED_OFFICIAL_RSS_COLLECTIONS) {
+  if (!officialRssFeeds.has(expected)) throw new Error(`Missing required official RSS collection: ${expected}`);
+}
+const officialSocialItems = officialItems.filter((item) => item.channel === "official-social");
+if (officialSocialItems.length < 50) throw new Error(`Expected official social items, got only ${officialSocialItems.length}`);
+for (const item of officialSocialItems) {
+  if (!isOfficialSocialPostUrl(item.url, item.publisher)) {
+    throw new Error(`Official social item URL does not match publisher handle: ${item.publisher} -> ${item.url}`);
   }
 }
 
-const aggregatorPlatforms = new Set(
+const aggregatorCollections = new Set(
   payload.items
-    .filter((item) => item.sourceFamily === "ai-news-aggregator")
-    .map((item) => item.siteName)
+    .filter((item) => item.family === "aggregator")
+    .map((item) => item.collection)
     .filter(Boolean)
 );
-if (aggregatorPlatforms.size < 8) {
-  throw new Error(`Expected broad ai-news-aggregator platform coverage, got ${aggregatorPlatforms.size}`);
+if (aggregatorCollections.size < 8) {
+  throw new Error(`Expected broad ai-news-aggregator platform coverage, got ${aggregatorCollections.size}`);
 }
 
 const generatedAt = new Date(payload.generatedAt).getTime();
@@ -67,9 +105,7 @@ if (!Number.isNaN(generatedAt)) {
 }
 
 for (const item of payload.items) {
-  if (!item.title || !item.url || !item.sourceFamily) {
-    throw new Error(`Invalid item shape: ${JSON.stringify(item)}`);
-  }
+  assertItemShape(item);
   if (String(item.id || "").startsWith("seed-")) {
     throw new Error(`Seed item must not be deployed: ${item.id}`);
   }
@@ -86,22 +122,48 @@ if (/<(?:script|link|style)[^>]+(?:src|href)\s*=\s*["']https?:\/\//i.test(index)
 
 console.log(`Check passed with ${payload.items.length} items.`);
 
-function officialChannel(item) {
-  if (item.channel) return item.channel;
-  return isXPostUrl(item.url) ? "official-x" : "official-rss";
-}
+function assertItemShape(item) {
+  const keys = Object.keys(item).sort();
+  const expectedKeys = [...ITEM_KEYS].sort();
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+    throw new Error(`Invalid item keys: ${JSON.stringify(keys)}`);
+  }
 
-function isXPostUrl(value) {
-  try {
-    const parsed = new URL(String(value));
-    return ["x.com", "twitter.com"].includes(parsed.hostname.toLowerCase());
-  } catch {
-    return false;
+  for (const legacyKey of LEGACY_KEYS) {
+    if (legacyKey in item) {
+      throw new Error(`Legacy taxonomy field must not be published: ${legacyKey}`);
+    }
+  }
+
+  if (!item.id || !item.title || !item.url || !item.family || !item.channel || !item.publisher || !item.collection || !item.originType) {
+    throw new Error(`Invalid item shape: ${JSON.stringify(item)}`);
+  }
+  if (!ALLOWED_FAMILIES.has(item.family)) {
+    throw new Error(`Unknown family: ${item.family}`);
+  }
+  if (!ALLOWED_CHANNELS.has(item.channel)) {
+    throw new Error(`Unknown channel: ${item.channel}`);
+  }
+  const allowedChannels = ALLOWED_CHANNELS_BY_FAMILY.get(item.family);
+  if (!allowedChannels?.has(item.channel)) {
+    throw new Error(`Invalid family/channel pairing: ${item.family}/${item.channel}`);
+  }
+  if (!Array.isArray(item.topic)) {
+    throw new Error(`topic must be an array: ${JSON.stringify(item)}`);
+  }
+  if (!item.topic.every((value) => typeof value === "string")) {
+    throw new Error(`topic must contain only strings: ${JSON.stringify(item)}`);
+  }
+  if (!(item.language === null || typeof item.language === "string")) {
+    throw new Error(`language must be string|null: ${JSON.stringify(item)}`);
+  }
+  if (!(item.score === null || Number.isFinite(item.score))) {
+    throw new Error(`score must be number|null: ${JSON.stringify(item)}`);
   }
 }
 
-function isOfficialXPostUrl(value, sourceName) {
-  const handle = String(sourceName || "").match(/@([A-Za-z0-9_]+)/)?.[1]?.toLowerCase();
+function isOfficialSocialPostUrl(value, publisher) {
+  const handle = String(publisher || "").match(/@([A-Za-z0-9_]+)/)?.[1]?.toLowerCase();
   if (!handle) return false;
   try {
     const parsed = new URL(String(value));

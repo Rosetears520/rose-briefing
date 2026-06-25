@@ -14,50 +14,66 @@ const X_FEED_CONCURRENCY = 8;
 const OFFICIAL_RSS_ITEMS_PER_FEED = 30;
 const MIN_OFFICIAL_RSS_FEEDS = 3;
 const MIN_OFFICIAL_RSS_ITEMS = 20;
-const MIN_OFFICIAL_X_ITEMS = 50;
+const MIN_OFFICIAL_SOCIAL_ITEMS = 50;
 const MAX_FETCH_BYTES = 8_000_000;
 const MAX_AI_NEWS_FUTURE_SKEW_MS = 60 * 60 * 1000;
 const MIN_ITEMS_BY_FAMILY = {
-  BestBlogs: 1,
-  "ai-news-aggregator": 1000,
-  "X/Twitter": 50,
-  Official: 50
+  curated: 1,
+  aggregator: 1000,
+  community: 50,
+  official: 50
 };
+const ALLOWED_CHANNELS_BY_FAMILY = new Map([
+  ["curated", new Set(["curated-rss"])],
+  ["aggregator", new Set(["aggregator-json"])],
+  ["community", new Set(["community-social"])],
+  ["official", new Set(["official-rss", "official-social"])]
+]);
+
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
 const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
 const SUYXH_OPML_FEEDS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json";
+const BESTBLOGS_COLLECTION = "BestBlogs AI RSS";
+const AI_NEWS_COLLECTION_FALLBACK = "ai-news-aggregator latest-7d";
 const OFFICIAL_RSS_FEEDS = [
-  { org: "OpenAI", name: "OpenAI News", url: "https://openai.com/news/rss.xml" },
-  { org: "Google AI", name: "Google AI Blog", url: "https://blog.google/innovation-and-ai/technology/ai/rss/" },
-  { org: "Mistral AI", name: "Mistral AI News", url: "https://mistral.ai/rss.xml" },
-  { org: "Microsoft AI", name: "Microsoft AI", url: "https://news.microsoft.com/source/topics/ai/feed/" },
-  { org: "Qwen", name: "Qwen Blog", url: "https://qwenlm.github.io/blog/index.xml" }
+  { org: "OpenAI", name: "OpenAI News", url: "https://openai.com/news/rss.xml", language: "en" },
+  { org: "Google AI", name: "Google AI Blog", url: "https://blog.google/innovation-and-ai/technology/ai/rss/", language: "en" },
+  { org: "Mistral AI", name: "Mistral AI News", url: "https://mistral.ai/rss.xml", language: "en" },
+  { org: "Microsoft AI", name: "Microsoft AI", url: "https://news.microsoft.com/source/topics/ai/feed/", language: "en" },
+  { org: "Qwen", name: "Qwen Blog", url: "https://qwenlm.github.io/blog/index.xml", language: "en" },
+  { org: "Hugging Face", name: "Hugging Face Blog", url: "https://huggingface.co/blog/feed.xml", language: "en" }
 ];
 
 const seedItems = [
   {
     id: "seed-bestblogs",
     title: "BestBlogs AI 高分 RSS 源已配置",
-    url: "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80",
-    sourceFamily: "BestBlogs",
-    sourceName: "BestBlogs",
-    siteName: "BestBlogs",
+    url: BESTBLOGS_RSS,
     publishedAt: new Date().toISOString(),
     summary: "运行 npm run update 后会替换为实时数据。",
-    tags: ["AI", "RSS"],
-    score: null
+    score: null,
+    family: "curated",
+    channel: "curated-rss",
+    publisher: "BestBlogs",
+    collection: BESTBLOGS_COLLECTION,
+    topic: ["ai", "rss"],
+    language: "zh",
+    originType: "curated-secondary"
   },
   {
     id: "seed-ai-news",
     title: "ai-news-aggregator 静态 JSON 源已配置",
     url: "https://github.com/SuYxh/ai-news-aggregator",
-    sourceFamily: "ai-news-aggregator",
-    sourceName: "SuYxh/ai-news-aggregator",
-    siteName: "ai-news-aggregator",
     publishedAt: new Date().toISOString(),
     summary: "运行 npm run update 后会拉取 latest-7d.json。",
-    tags: ["AI", "JSON"],
-    score: null
+    score: null,
+    family: "aggregator",
+    channel: "aggregator-json",
+    publisher: "SuYxh/ai-news-aggregator",
+    collection: AI_NEWS_COLLECTION_FALLBACK,
+    topic: ["ai", "json"],
+    language: "zh",
+    originType: "aggregated-hotlist"
   }
 ];
 
@@ -79,13 +95,13 @@ async function main() {
     }
   }
 
-  for (const family of requiredSourceFamilies()) {
+  for (const family of requiredFamilies()) {
     const minimum = MIN_ITEMS_BY_FAMILY[family] ?? 1;
-    const currentCount = items.filter((item) => item.sourceFamily === family).length;
+    const currentCount = items.filter((item) => item.family === family).length;
     if (currentCount < minimum) {
-      const fallbackItems = existingItems.filter((item) => item.sourceFamily === family);
+      const fallbackItems = existingItems.filter((item) => item.family === family);
       if (fallbackItems.length >= minimum) {
-        items = items.filter((item) => item.sourceFamily !== family);
+        items = items.filter((item) => item.family !== family);
         items.push(...fallbackItems);
         warnings.push(`${family} fetch returned ${currentCount} items; reused ${fallbackItems.length} existing items`);
       }
@@ -94,7 +110,7 @@ async function main() {
 
   items = ensureOfficialSubsources(items, existingItems, warnings);
 
-  let normalized = dedupe(items)
+  const normalized = dedupe(items)
     .sort((a, b) => dateValue(b.publishedAt) - dateValue(a.publishedAt))
     .slice(0, MAX_ITEMS);
 
@@ -129,22 +145,24 @@ async function readExistingItems() {
   if (!existsSync(outputPath)) return [];
   try {
     const payload = JSON.parse(await readFile(outputPath, "utf8"));
-    return Array.isArray(payload.items) ? payload.items : [];
+    return Array.isArray(payload.items)
+      ? payload.items.map((item) => normalizeItem(item)).filter(Boolean)
+      : [];
   } catch {
     return [];
   }
 }
 
 function assertRequiredSources(items) {
-  const families = new Set(items.map((item) => item.sourceFamily));
-  for (const expected of requiredSourceFamilies()) {
+  const families = new Set(items.map((item) => item.family));
+  for (const expected of requiredFamilies()) {
     if (!families.has(expected)) {
-      throw new Error(`Missing required source family ${expected}; preserving existing data instead of publishing partial data.`);
+      throw new Error(`Missing required family ${expected}; preserving existing data instead of publishing partial data.`);
     }
-    const count = items.filter((item) => item.sourceFamily === expected).length;
+    const count = items.filter((item) => item.family === expected).length;
     const minimum = MIN_ITEMS_BY_FAMILY[expected] ?? 1;
     if (count < minimum) {
-      throw new Error(`Source family ${expected} has only ${count} items; preserving existing data instead of publishing partial data.`);
+      throw new Error(`Family ${expected} has only ${count} items; preserving existing data instead of publishing partial data.`);
     }
   }
 
@@ -156,48 +174,45 @@ function assertRequiredSources(items) {
   if (officialRssFeeds < MIN_OFFICIAL_RSS_FEEDS) {
     throw new Error(`Official RSS has only ${officialRssFeeds} feeds; preserving existing data instead of publishing partial data.`);
   }
-  const officialXCount = countOfficialChannel(items, "official-x");
-  if (officialXCount < MIN_OFFICIAL_X_ITEMS) {
-    throw new Error(`Official X has only ${officialXCount} items; preserving existing data instead of publishing partial data.`);
+  const officialSocialCount = countOfficialChannel(items, "official-social");
+  if (officialSocialCount < MIN_OFFICIAL_SOCIAL_ITEMS) {
+    throw new Error(`Official social has only ${officialSocialCount} items; preserving existing data instead of publishing partial data.`);
   }
 }
 
 function ensureOfficialSubsources(items, existingItems, warnings) {
   const officialRssCount = countOfficialChannel(items, "official-rss");
   const officialRssFeeds = countOfficialRssFeeds(items);
-  const officialXCount = countOfficialChannel(items, "official-x");
-  if (officialRssCount >= MIN_OFFICIAL_RSS_ITEMS && officialRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && officialXCount >= MIN_OFFICIAL_X_ITEMS) return items;
+  const officialSocialCount = countOfficialChannel(items, "official-social");
+  if (officialRssCount >= MIN_OFFICIAL_RSS_ITEMS && officialRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && officialSocialCount >= MIN_OFFICIAL_SOCIAL_ITEMS) {
+    return items;
+  }
 
-  const existingOfficial = existingItems.filter((item) => item.sourceFamily === "Official");
+  const existingOfficial = existingItems.filter((item) => item.family === "official");
   const existingRssCount = countOfficialChannel(existingOfficial, "official-rss");
   const existingRssFeeds = countOfficialRssFeeds(existingOfficial);
-  const existingXCount = countOfficialChannel(existingOfficial, "official-x");
-  if (existingRssCount >= MIN_OFFICIAL_RSS_ITEMS && existingRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && existingXCount >= MIN_OFFICIAL_X_ITEMS) {
-    warnings.push(`Official subsource coverage low (rss ${officialRssCount}/${officialRssFeeds} feeds, x ${officialXCount}); reused ${existingOfficial.length} existing official items`);
-    return [...items.filter((item) => item.sourceFamily !== "Official"), ...existingOfficial];
+  const existingSocialCount = countOfficialChannel(existingOfficial, "official-social");
+  if (existingRssCount >= MIN_OFFICIAL_RSS_ITEMS && existingRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && existingSocialCount >= MIN_OFFICIAL_SOCIAL_ITEMS) {
+    warnings.push(`Official subsource coverage low (rss ${officialRssCount}/${officialRssFeeds} feeds, social ${officialSocialCount}); reused ${existingOfficial.length} existing official items`);
+    return [...items.filter((item) => item.family !== "official"), ...existingOfficial];
   }
 
   return items;
 }
 
 function countOfficialChannel(items, channel) {
-  return items.filter((item) => item.sourceFamily === "Official" && officialChannel(item) === channel).length;
+  return items.filter((item) => item.family === "official" && item.channel === channel).length;
 }
 
 function countOfficialRssFeeds(items) {
   return new Set(items
-    .filter((item) => item.sourceFamily === "Official" && officialChannel(item) === "official-rss")
-    .map((item) => item.sourceName)
+    .filter((item) => item.family === "official" && item.channel === "official-rss")
+    .map((item) => item.collection)
     .filter(Boolean)).size;
 }
 
-function officialChannel(item) {
-  if (item.channel) return item.channel;
-  return isXPostUrl(item.url) ? "official-x" : "official-rss";
-}
-
-function requiredSourceFamilies() {
-  return ["BestBlogs", "ai-news-aggregator", "X/Twitter", "Official"];
+function requiredFamilies() {
+  return ["curated", "aggregator", "community", "official"];
 }
 
 async function settle(promise) {
@@ -214,7 +229,8 @@ async function fetchBestBlogs() {
   const items = itemBlocks.map((block, index) => {
     const title = readXmlTag(block, "title");
     const url = readXmlTag(block, "link");
-    const description = cleanText(readXmlTag(block, "description"));
+    const description = readXmlTag(block, "description");
+    const descriptionText = cleanText(description);
     const keywords = splitTags(readXmlTag(block, "keywords"));
     const category = readXmlTag(block, "category");
     const author = readXmlTag(block, "author");
@@ -224,13 +240,16 @@ async function fetchBestBlogs() {
       id: readXmlTag(block, "guid") || `bestblogs-${index}`,
       title,
       url,
-      sourceFamily: "BestBlogs",
-      sourceName: author || "BestBlogs",
-      siteName: "BestBlogs",
       publishedAt: parseDate(readXmlTag(block, "pubDate")),
-      summary: description,
-      tags: [...new Set([category, ...keywords].filter(Boolean))],
-      score: Number.isFinite(Number(scoreText)) ? Number(scoreText) : null
+      summary: descriptionText,
+      score: Number.isFinite(Number(scoreText)) ? Number(scoreText) : null,
+      family: "curated",
+      channel: "curated-rss",
+      publisher: extractBestBlogsSource(descriptionText) || author || "BestBlogs",
+      collection: BESTBLOGS_COLLECTION,
+      topic: [...new Set([category, ...keywords].filter(Boolean))],
+      language: extractBestBlogsLanguage(descriptionText) || detectLanguage([title, descriptionText]),
+      originType: "curated-secondary"
     });
   }).filter(Boolean);
 
@@ -244,13 +263,16 @@ async function fetchAiNewsAggregator() {
     id: item.id,
     title: item.title_bilingual || item.title_zh || item.title_en || item.title,
     url: item.url,
-    sourceFamily: "ai-news-aggregator",
-    sourceName: item.source || item.site_name || "ai-news-aggregator",
-    siteName: item.site_name || item.site_id || "ai-news-aggregator",
     publishedAt: normalizeAiNewsDate(item),
     summary: item.title_original && item.title_original !== item.title ? item.title_original : "",
-    tags: [item.site_name, item.source].filter(Boolean),
-    score: null
+    score: null,
+    family: "aggregator",
+    channel: "aggregator-json",
+    publisher: item.source || item.site_name || "ai-news-aggregator",
+    collection: item.site_name || item.site_id || AI_NEWS_COLLECTION_FALLBACK,
+    topic: [],
+    language: detectLanguage([item.title_original, item.title_zh, item.title_en, item.title]),
+    originType: "aggregated-hotlist"
   })).filter(Boolean);
 
   const warnings = [];
@@ -263,11 +285,12 @@ async function fetchAiNewsAggregator() {
 async function fetchOfficialRssFeeds() {
   const feedResults = await mapWithConcurrency(OFFICIAL_RSS_FEEDS, 4, async (feed) => {
     const items = await fetchRssItems(feed.url, {
-      sourceFamily: "Official",
-      siteName: feed.org,
-      sourceName: feed.name,
+      family: "official",
       channel: "official-rss",
-      tags: ["Official", feed.org]
+      publisher: feed.org,
+      collection: feed.name,
+      language: feed.language,
+      originType: "direct-official"
     }, OFFICIAL_RSS_ITEMS_PER_FEED);
     return { items };
   });
@@ -288,17 +311,19 @@ async function fetchRssItems(url, defaults, limit) {
   const xml = await fetchText(url);
   const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
   return itemBlocks.slice(0, limit).map((block, index) => normalizeItem({
-    id: readXmlTag(block, "guid") || readXmlTag(block, "link") || `${defaults.sourceFamily}-${hash(`${url}-${index}`)}`,
+    id: readXmlTag(block, "guid") || readXmlTag(block, "link") || `${defaults.family}-${hash(`${url}-${index}`)}`,
     title: readXmlTag(block, "title"),
     url: readXmlTag(block, "link"),
-    sourceFamily: defaults.sourceFamily,
-    sourceName: defaults.sourceName,
-    siteName: defaults.siteName,
-    channel: defaults.channel,
     publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
     summary: readXmlTag(block, "description"),
-    tags: [...defaults.tags, readXmlTag(block, "category")].filter(Boolean),
-    score: null
+    score: null,
+    family: defaults.family,
+    channel: defaults.channel,
+    publisher: defaults.publisher,
+    collection: defaults.collection,
+    topic: splitTags(readXmlTag(block, "category")),
+    language: defaults.language,
+    originType: defaults.originType
   })).filter(Boolean);
 }
 
@@ -317,9 +342,9 @@ async function fetchXgoFeeds() {
     }
   }
 
-  const officialCount = items.filter((item) => item.sourceFamily === "Official").length;
-  const xCount = items.filter((item) => item.sourceFamily === "X/Twitter").length;
-  const warnings = [`xgo feeds: ${officialCount} official items, ${xCount} X/Twitter items from ${feeds.length - failures.length}/${feeds.length} feeds`];
+  const officialCount = items.filter((item) => item.family === "official").length;
+  const communityCount = items.filter((item) => item.family === "community").length;
+  const warnings = [`xgo feeds: ${officialCount} official items, ${communityCount} community items from ${feeds.length - failures.length}/${feeds.length} feeds`];
   if (failures.length > 0) warnings.push(`X/Twitter failed feeds: ${failures.length}`);
   return { items, warnings };
 }
@@ -352,18 +377,22 @@ async function fetchOneXgoFeed(feed) {
   const items = itemBlocks.slice(0, X_ITEMS_PER_FEED).map((block, index) => {
     const itemUrl = readXmlTag(block, "link");
     const officialItem = official && isOfficialXgoItemUrl(feed, itemUrl);
+    const title = readXmlTag(block, "title");
+    const summary = readXmlTag(block, "description");
     return normalizeItem({
       id: readXmlTag(block, "guid") || `xgo-${hash(`${feed.url}-${index}`)}`,
-      title: readXmlTag(block, "title"),
+      title,
       url: itemUrl,
-      sourceFamily: officialItem ? "Official" : "X/Twitter",
-      sourceName: feed.name,
-      siteName: officialItem ? officialSiteName(feed) : feed.groupName,
-      channel: officialItem ? "official-x" : "xgo",
       publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
-      summary: readXmlTag(block, "description"),
-      tags: [feed.groupName, feed.name, "X/Twitter", officialItem ? "Official" : ""].filter(Boolean),
-      score: null
+      summary,
+      score: null,
+      family: officialItem ? "official" : "community",
+      channel: officialItem ? "official-social" : "community-social",
+      publisher: feed.name,
+      collection: feed.groupName,
+      topic: [],
+      language: detectLanguage([title, summary]),
+      originType: officialItem ? "official-social" : "community-post"
     });
   }).filter(Boolean);
 
@@ -372,10 +401,6 @@ async function fetchOneXgoFeed(feed) {
 
 function isOfficialXgoFeed(feed) {
   return ["AI Companies", "中国AI公司"].includes(feed.groupName);
-}
-
-function officialSiteName(feed) {
-  return cleanText(feed.name).replace(/\s*\(@.*?\)\s*$/, "") || feed.groupName;
 }
 
 function officialHandle(feed) {
@@ -390,15 +415,6 @@ function isOfficialXgoItemUrl(feed, value) {
     const parsed = new URL(decodeEntities(String(value)).trim());
     if (!["x.com", "twitter.com"].includes(parsed.hostname.toLowerCase())) return false;
     return parsed.pathname.split("/").filter(Boolean)[0]?.toLowerCase() === handle;
-  } catch {
-    return false;
-  }
-}
-
-function isXPostUrl(value) {
-  try {
-    const parsed = new URL(String(value));
-    return ["x.com", "twitter.com"].includes(parsed.hostname.toLowerCase());
   } catch {
     return false;
   }
@@ -441,23 +457,246 @@ function normalizeAiNewsDate(item) {
 }
 
 function normalizeItem(input) {
-  const title = cleanText(input.title);
-  const url = cleanUrl(input.url);
+  const base = isLegacyTaxonomyItem(input) ? migrateLegacyItem(input) : input;
+  const title = cleanText(base.title);
+  const url = cleanUrl(base.url);
   if (!title || !url) return null;
 
-  const publishedAt = parseDate(input.publishedAt) || new Date().toISOString();
+  const publishedAt = parseDate(base.publishedAt) || new Date().toISOString();
+  const family = normalizeFamily(base.family);
+  const channel = normalizeChannel(base.channel, family, url);
+  const publisher = cleanText(base.publisher) || fallbackPublisher(family, channel, base.collection);
+  const collection = cleanText(base.collection) || fallbackCollection(family, publisher);
+  const summary = trim(cleanText(base.summary), 360);
+  const language = normalizeLanguage(base.language) || detectLanguage([title, summary]) || null;
+  const score = family === "curated" ? normalizeScore(base.score) : null;
+
   return {
-    id: String(input.id || hash(`${title}|${url}`)),
+    id: String(base.id || hash(`${title}|${url}`)),
     title,
     url,
-    sourceFamily: input.sourceFamily || "Unknown",
-    sourceName: cleanText(input.sourceName) || input.sourceFamily || "Unknown",
-    siteName: cleanText(input.siteName) || input.sourceFamily || "Unknown",
     publishedAt,
-    summary: trim(cleanText(input.summary), 360),
-    tags: [...new Set((input.tags || []).map(cleanText).filter(Boolean))].slice(0, 8),
-    score: Number.isFinite(input.score) ? input.score : null
+    summary,
+    score,
+    family,
+    channel,
+    publisher,
+    collection,
+    topic: normalizeTopics(base.topic || [], { publisher, collection }),
+    language,
+    originType: normalizeOriginType(base.originType, family, channel)
   };
+}
+
+function isLegacyTaxonomyItem(input) {
+  return Boolean(input && ("sourceFamily" in input || "sourceName" in input || "siteName" in input || "tags" in input));
+}
+
+function migrateLegacyItem(input) {
+  const family = normalizeFamily(input.family || input.sourceFamily);
+  const channel = normalizeChannel(input.channel, family, input.url);
+  const title = input.title;
+  const summary = input.summary;
+
+  if (family === "curated") {
+    return {
+      id: input.id,
+      title,
+      url: input.url,
+      publishedAt: input.publishedAt,
+      summary,
+      score: input.score,
+      family,
+      channel,
+      publisher: extractBestBlogsSource(summary) || cleanText(input.sourceName) || "BestBlogs",
+      collection: cleanText(input.collection) || cleanText(input.siteName) || BESTBLOGS_COLLECTION,
+      topic: input.topic || input.tags || [],
+      language: input.language || extractBestBlogsLanguage(summary),
+      originType: input.originType || "curated-secondary"
+    };
+  }
+
+  if (family === "aggregator") {
+    return {
+      id: input.id,
+      title,
+      url: input.url,
+      publishedAt: input.publishedAt,
+      summary,
+      score: input.score,
+      family,
+      channel,
+      publisher: cleanText(input.publisher) || cleanText(input.sourceName) || cleanText(input.siteName) || "ai-news-aggregator",
+      collection: cleanText(input.collection) || cleanText(input.siteName) || AI_NEWS_COLLECTION_FALLBACK,
+      topic: input.topic || input.tags || [],
+      language: input.language,
+      originType: input.originType || "aggregated-hotlist"
+    };
+  }
+
+  if (family === "official") {
+    const officialPublisher = channel === "official-rss"
+      ? cleanText(input.publisher) || cleanText(input.siteName) || cleanText(input.sourceName)
+      : cleanText(input.publisher) || cleanText(input.sourceName) || cleanText(input.siteName);
+    const officialCollection = cleanText(input.collection)
+      || (channel === "official-rss"
+        ? cleanText(input.sourceName) || cleanText(input.siteName)
+        : legacySocialCollection(input));
+    return {
+      id: input.id,
+      title,
+      url: input.url,
+      publishedAt: input.publishedAt,
+      summary,
+      score: input.score,
+      family,
+      channel,
+      publisher: officialPublisher,
+      collection: officialCollection,
+      topic: input.topic || input.tags || [],
+      language: input.language,
+      originType: input.originType || normalizeOriginType(null, family, channel)
+    };
+  }
+
+  return {
+    id: input.id,
+    title,
+    url: input.url,
+    publishedAt: input.publishedAt,
+    summary,
+    score: input.score,
+    family: "community",
+    channel,
+    publisher: cleanText(input.publisher) || cleanText(input.sourceName) || "X/Twitter",
+    collection: cleanText(input.collection) || cleanText(input.siteName) || "X/Twitter",
+    topic: input.topic || input.tags || [],
+    language: input.language,
+    originType: input.originType || "community-post"
+  };
+}
+
+function normalizeFamily(value) {
+  switch (String(value || "").trim()) {
+    case "curated":
+    case "BestBlogs":
+      return "curated";
+    case "aggregator":
+    case "ai-news-aggregator":
+      return "aggregator";
+    case "official":
+    case "Official":
+      return "official";
+    case "community":
+    case "X/Twitter":
+      return "community";
+    default:
+      return "community";
+  }
+}
+
+function normalizeChannel(value, family, url) {
+  const raw = String(value || "").trim();
+  const canonical = raw === "official-x"
+    ? "official-social"
+    : raw === "xgo"
+      ? "community-social"
+      : raw;
+  const channel = canonical || defaultChannelForFamily(family, url);
+  if (!isValidFamilyChannel(family, channel)) {
+    throw new Error(`Invalid family/channel pairing: ${family}/${channel}`);
+  }
+  return channel;
+}
+
+function defaultChannelForFamily(family, url) {
+  if (family === "curated") return "curated-rss";
+  if (family === "aggregator") return "aggregator-json";
+  if (family === "official") return isXPostUrl(url) ? "official-social" : "official-rss";
+  return "community-social";
+}
+
+function isValidFamilyChannel(family, channel) {
+  return ALLOWED_CHANNELS_BY_FAMILY.get(family)?.has(channel) ?? false;
+}
+
+function normalizeOriginType(value, family, channel) {
+  const raw = cleanText(value);
+  if (raw) return raw;
+  if (family === "curated") return "curated-secondary";
+  if (family === "aggregator") return "aggregated-hotlist";
+  if (family === "official") return channel === "official-social" ? "official-social" : "direct-official";
+  return "community-post";
+}
+
+function fallbackPublisher(family, channel, collection) {
+  if (family === "official" && channel === "official-rss") return cleanText(collection) || "Official";
+  if (family === "aggregator") return "ai-news-aggregator";
+  if (family === "curated") return "BestBlogs";
+  if (family === "official") return "Official";
+  return "X/Twitter";
+}
+
+function fallbackCollection(family, publisher) {
+  if (family === "curated") return BESTBLOGS_COLLECTION;
+  if (family === "aggregator") return AI_NEWS_COLLECTION_FALLBACK;
+  return publisher;
+}
+
+function normalizeTopics(values, { publisher, collection }) {
+  const blocked = new Set([
+    normalizeTopicKey(publisher),
+    normalizeTopicKey(collection),
+    normalizeTopicKey("official"),
+    normalizeTopicKey("x/twitter"),
+    normalizeTopicKey("rss"),
+    normalizeTopicKey("opml rss")
+  ].filter(Boolean));
+  const topics = [];
+  const seen = new Set();
+  for (const rawValue of Array.isArray(values) ? values : [values]) {
+    const cleaned = trim(cleanText(rawValue), 48);
+    if (!cleaned) continue;
+    const normalized = normalizeTopicValue(cleaned);
+    const key = normalizeTopicKey(normalized);
+    if (!key || blocked.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    topics.push(normalized);
+    if (topics.length >= 8) break;
+  }
+  return topics;
+}
+
+function normalizeTopicValue(value) {
+  return hasHan(value) ? value : value.toLowerCase();
+}
+
+function normalizeTopicKey(value = "") {
+  return String(value).trim().toLowerCase();
+}
+
+function normalizeLanguage(value) {
+  const cleaned = cleanText(value == null ? "" : value).toLowerCase();
+  if (!cleaned) return null;
+  if (["zh", "zh-cn", "zh-hans", "中文", "汉语", "简体中文", "chinese"].some((token) => cleaned.includes(token))) return "zh";
+  if (["en", "en-us", "en-gb", "英文", "英语", "english"].some((token) => cleaned.includes(token))) return "en";
+  return cleaned || null;
+}
+
+function detectLanguage(values) {
+  const text = values.filter(Boolean).map((value) => cleanText(value)).join(" ");
+  if (!text) return null;
+  const hanCount = (text.match(/[\p{Script=Han}]/gu) || []).length;
+  const latinCount = (text.match(/[A-Za-z]/g) || []).length;
+  if (hanCount >= 2 && hanCount >= latinCount / 2) return "zh";
+  if (latinCount >= 6) return "en";
+  return null;
+}
+
+function normalizeScore(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
 }
 
 function dedupe(items) {
@@ -481,9 +720,10 @@ function mergeItems(a, b) {
   const older = newer === b ? a : b;
   return {
     ...newer,
-    tags: [...new Set([...a.tags, ...b.tags, older.siteName, older.sourceName].filter(Boolean))].slice(0, 10),
+    topic: normalizeTopics([...a.topic, ...b.topic], { publisher: newer.publisher, collection: newer.collection }),
     summary: newer.summary || older.summary,
-    score: newer.score ?? older.score
+    score: newer.score ?? older.score,
+    language: newer.language || older.language
   };
 }
 
@@ -512,7 +752,8 @@ function readXmlTag(block, tag) {
 }
 
 function decodeEntities(value = "") {
-  return value
+  const text = value == null ? "" : String(value);
+  return text
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -523,7 +764,8 @@ function decodeEntities(value = "") {
 }
 
 function cleanText(value = "") {
-  return decodeEntities(String(value))
+  const text = value == null ? "" : value;
+  return decodeEntities(text)
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]*>/g, " ")
@@ -532,7 +774,7 @@ function cleanText(value = "") {
 }
 
 function cleanUrl(value = "") {
-  const raw = decodeEntities(String(value)).trim();
+  const raw = decodeEntities(value == null ? "" : value).trim();
   if (!raw) return "";
   try {
     const parsed = new URL(raw);
@@ -589,6 +831,46 @@ function hash(value) {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0).toString(16);
+}
+
+function isXPostUrl(value) {
+  try {
+    const parsed = new URL(String(value));
+    return ["x.com", "twitter.com"].includes(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function extractBestBlogsSource(value) {
+  return extractLabeledMeta(value, "Source", ["Author", "Category", "Language", "Read Time", "Word Count"]);
+}
+
+function extractBestBlogsLanguage(value) {
+  return normalizeLanguage(extractLabeledMeta(value, "Language", ["Read Time", "Word Count"]));
+}
+
+function extractLabeledMeta(value, label, nextLabels) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const boundary = nextLabels.join("|");
+  const regex = new RegExp(`${label}\\s*[：:]\\s*(.+?)(?=\\s+(?:${boundary})\\s*[：:]|$)`, "i");
+  const match = text.match(regex);
+  return match ? cleanText(match[1]) : "";
+}
+
+function legacySocialCollection(input) {
+  const sourceName = cleanText(input.sourceName);
+  const siteName = cleanText(input.siteName);
+  const tags = Array.isArray(input.tags) ? input.tags : [];
+  const candidate = tags
+    .map((tag) => cleanText(tag))
+    .find((tag) => tag && ![sourceName, siteName, "X/Twitter", "Official", "OPML RSS"].includes(tag) && !/@[A-Za-z0-9_]+/.test(tag));
+  return candidate || siteName || sourceName || "X/Twitter";
+}
+
+function hasHan(value) {
+  return /\p{Script=Han}/u.test(value);
 }
 
 main().catch(async (error) => {

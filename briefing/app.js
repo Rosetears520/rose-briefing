@@ -2,8 +2,10 @@ const state = {
   payload: null,
   items: [],
   query: "",
-  source: "all",
-  platform: "all",
+  family: "all",
+  channel: "all",
+  publisher: "all",
+  topic: "all",
   sort: "newest",
   range: "24h"
 };
@@ -12,21 +14,29 @@ const DISPLAY_LIMIT = 800;
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 const FAM_COLOR = {
-  BestBlogs: "var(--fam-BestBlogs)",
-  Official: "var(--fam-Official)",
-  "X/Twitter": "var(--fam-X)",
-  "ai-news-aggregator": "var(--fam-ai)",
-  Unknown: "var(--fam-Unknown)"
+  curated: "var(--fam-curated)",
+  official: "var(--fam-official)",
+  community: "var(--fam-community)",
+  aggregator: "var(--fam-aggregator)",
+  unknown: "var(--fam-unknown)"
 };
 
-const SOURCE_LABEL = {
-  BestBlogs: "BestBlogs",
-  Official: "官方",
-  "X/Twitter": "社区/X",
-  "ai-news-aggregator": "全网聚合"
+const FAMILY_LABEL = {
+  curated: "精选",
+  official: "官方",
+  community: "社区",
+  aggregator: "聚合"
 };
 
-const SOURCE_ORDER = ["BestBlogs", "Official", "X/Twitter", "ai-news-aggregator"];
+const FAMILY_ORDER = ["curated", "official", "community", "aggregator"];
+
+const CHANNEL_LABEL = {
+  "curated-rss": "精选 RSS",
+  "official-rss": "官方 RSS",
+  "official-social": "官方社媒",
+  "community-social": "社区社媒",
+  "aggregator-json": "聚合 JSON"
+};
 
 const elements = {
   count: document.querySelector("#item-count"),
@@ -34,8 +44,10 @@ const elements = {
   kicker: document.querySelector("#kicker"),
   generatedAt: document.querySelector("#generated-at"),
   search: document.querySelector("#search"),
-  sourceFilter: document.querySelector("#source-filter"),
-  platformFilter: document.querySelector("#platform-filter"),
+  familyFilter: document.querySelector("#family-filter"),
+  channelFilter: document.querySelector("#channel-filter"),
+  publisherFilter: document.querySelector("#publisher-filter"),
+  topicFilter: document.querySelector("#topic-filter"),
   sortOrder: document.querySelector("#sort-order"),
   rangeFilter: document.querySelector("#range-filter"),
   status: document.querySelector("#status"),
@@ -55,7 +67,7 @@ async function init() {
   const response = await fetch("data/items.json", { cache: "no-store" });
   if (!response.ok) throw new Error(`data/items.json ${response.status}`);
   state.payload = await response.json();
-  state.items = Array.isArray(state.payload.items) ? state.payload.items : [];
+  state.items = Array.isArray(state.payload.items) ? state.payload.items.map(normalizeItem) : [];
 
   elements.kicker.textContent = state.payload.generatedAt
     ? `Daily Brief · ${formatIssueDate(state.payload.generatedAt)}`
@@ -64,7 +76,7 @@ async function init() {
     ? `北京时间 <b>${formatDateTime(state.payload.generatedAt)}</b> 更新`
     : "未知更新时间";
 
-  fillSourceChips(state.items);
+  fillFamilyChips(state.items);
   bindControls();
   render();
 }
@@ -75,16 +87,26 @@ function bindControls() {
     render();
   });
 
-  elements.sourceFilter.addEventListener("click", (event) => {
+  elements.familyFilter.addEventListener("click", (event) => {
     const chip = event.target.closest(".chip");
     if (!chip) return;
-    state.source = chip.dataset.src;
-    syncSourceChips();
+    state.family = chip.dataset.family;
+    syncFamilyChips();
     render();
   });
 
-  elements.platformFilter.addEventListener("change", () => {
-    state.platform = elements.platformFilter.value;
+  elements.channelFilter.addEventListener("change", () => {
+    state.channel = elements.channelFilter.value;
+    render();
+  });
+
+  elements.publisherFilter.addEventListener("change", () => {
+    state.publisher = elements.publisherFilter.value;
+    render();
+  });
+
+  elements.topicFilter.addEventListener("change", () => {
+    state.topic = elements.topicFilter.value;
     render();
   });
 
@@ -113,36 +135,38 @@ function bindControls() {
 
   document.querySelector("#nav-latest")?.addEventListener("click", (event) => {
     event.preventDefault();
-    state.source = "all";
-    syncSourceChips();
+    resetTaxonomyFilters();
+    syncFamilyChips();
     render();
   });
 
   document.querySelector("#nav-official")?.addEventListener("click", (event) => {
     event.preventDefault();
-    state.source = "Official";
-    syncSourceChips();
+    resetTaxonomyFilters();
+    state.family = "official";
+    syncFamilyChips();
     render();
   });
 }
 
-function fillSourceChips(items) {
-  const families = [...new Set(items.map((item) => item.sourceFamily).filter(Boolean))];
-  const chips = [{ src: "all", label: "全部" }, ...SOURCE_ORDER.filter((src) => families.includes(src)).map((src) => ({ src, label: SOURCE_LABEL[src] || src }))];
-  elements.sourceFilter.replaceChildren(...chips.map((c) => {
+function fillFamilyChips(items) {
+  const families = [...new Set(items.map((item) => item.family).filter(Boolean))];
+  if (state.family !== "all" && !families.includes(state.family)) state.family = "all";
+  const chips = [{ family: "all", label: "全部" }, ...FAMILY_ORDER.filter((family) => families.includes(family)).map((family) => ({ family, label: FAMILY_LABEL[family] || family }))];
+  elements.familyFilter.replaceChildren(...chips.map((chip) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "chip";
-    button.dataset.src = c.src;
-    button.textContent = c.label;
+    button.dataset.family = chip.family;
+    button.textContent = chip.label;
     return button;
   }));
-  syncSourceChips();
+  syncFamilyChips();
 }
 
-function syncSourceChips() {
-  elements.sourceFilter.querySelectorAll(".chip").forEach((node) => {
-    node.classList.toggle("on", node.dataset.src === state.source);
+function syncFamilyChips() {
+  elements.familyFilter.querySelectorAll(".chip").forEach((node) => {
+    node.classList.toggle("on", node.dataset.family === state.family);
   });
 }
 
@@ -154,13 +178,22 @@ function syncRangeButtons() {
 
 function render() {
   const base = getRangeItems();
-  syncPlatformOptions(base);
+  fillFamilyChips(base);
+
+  const familyItems = base.filter(matchesFamily);
+  syncChannelOptions(familyItems);
+
+  const familyChannelItems = familyItems.filter(matchesChannel);
+  syncPublisherOptions(familyChannelItems);
+
+  const taxonomyItems = familyChannelItems.filter(matchesPublisher);
+  syncTopicOptions(taxonomyItems);
+
   updateHeader(base);
   updateCoverageDetail(base);
 
-  const filtered = base
-    .filter(matchesSource)
-    .filter(matchesPlatform)
+  const filtered = taxonomyItems
+    .filter(matchesTopic)
     .filter(matchesQuery)
     .sort(compareItems);
 
@@ -196,45 +229,81 @@ function getGeneratedAtMs() {
   return Number.isNaN(generated) ? Date.now() : generated;
 }
 
-function syncPlatformOptions(baseItems) {
-  const previous = state.platform;
-  const options = [...new Set(baseItems.map((item) => item.siteName || item.sourceName).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "zh-CN"));
-  const valid = previous === "all" || options.includes(previous);
-  if (!valid) state.platform = "all";
+function syncChannelOptions(baseItems) {
+  const counts = countBy(baseItems, (item) => item.channel);
+  const options = [...counts.entries()].sort((a, b) => labelChannel(a[0]).localeCompare(labelChannel(b[0]), "zh-CN"));
+  syncSelectOptions(elements.channelFilter, "all", "全部渠道", options, state.channel, (value) => `${labelChannel(value)} (${counts.get(value)})`, (value) => {
+    state.channel = value;
+  });
+}
 
-  elements.platformFilter.replaceChildren();
+function syncPublisherOptions(baseItems) {
+  const counts = countBy(baseItems, (item) => item.publisher);
+  const options = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN"));
+  syncSelectOptions(elements.publisherFilter, "all", "全部发布方", options, state.publisher, (value) => `${value} (${counts.get(value)})`, (value) => {
+    state.publisher = value;
+  });
+}
+
+function syncTopicOptions(baseItems) {
+  const counts = new Map();
+  for (const item of baseItems) {
+    for (const topic of item.topic) {
+      counts.set(topic, (counts.get(topic) || 0) + 1);
+    }
+  }
+  const options = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN"));
+  syncSelectOptions(elements.topicFilter, "all", "全部话题", options, state.topic, (value) => `${value} (${counts.get(value)})`, (value) => {
+    state.topic = value;
+  });
+}
+
+function syncSelectOptions(element, allValue, allLabel, entries, currentValue, optionLabel, setValue) {
+  const values = entries.map(([value]) => value);
+  if (currentValue !== allValue && !values.includes(currentValue)) setValue(allValue);
+
+  element.replaceChildren();
   const all = document.createElement("option");
-  all.value = "all";
-  all.textContent = "全部平台";
-  elements.platformFilter.append(all);
-  for (const value of options) {
+  all.value = allValue;
+  all.textContent = allLabel;
+  element.append(all);
+
+  for (const [value] of entries) {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = value;
-    elements.platformFilter.append(option);
+    option.textContent = optionLabel(value);
+    element.append(option);
   }
-  elements.platformFilter.value = state.platform;
+
+  element.value = currentValue === allValue || values.includes(currentValue) ? currentValue : allValue;
 }
 
 function updateHeader(baseItems) {
-  const platformCount = new Set(baseItems.map((item) => item.siteName).filter(Boolean)).size;
-  const sourceCount = new Set(baseItems.map((item) => item.sourceName).filter(Boolean)).size;
+  const publisherCount = uniqueCount(baseItems.map((item) => item.publisher));
+  const collectionCount = uniqueCount(baseItems.map((item) => item.collection));
+  const channelCount = uniqueCount(baseItems.map((item) => item.channel));
   elements.count.textContent = String(baseItems.length);
-  elements.coverageLine.innerHTML = `覆盖 <b>${platformCount}</b> 个平台、<b>${sourceCount}</b> 个来源`;
+  elements.coverageLine.innerHTML = `覆盖 <b>${publisherCount}</b> 个发布方、<b>${collectionCount}</b> 个集合、<b>${channelCount}</b> 个渠道`;
 }
 
 function updateCoverageDetail(baseItems) {
   const rows = [...groupCoverage(baseItems).entries()].sort((a, b) => b[1].itemCount - a[1].itemCount || a[0].localeCompare(b[0], "zh-CN"));
-  elements.detailTitle.textContent = `${state.range} 来源详情`;
-  elements.detailList.replaceChildren(...rows.map(([site, info]) => {
+  elements.detailTitle.textContent = `${state.range} 覆盖详情`;
+  elements.detailList.replaceChildren(...rows.map(([publisher, info]) => {
     const item = document.createElement("div");
     item.className = "coverage-detail-item";
     const strong = document.createElement("strong");
-    strong.textContent = site;
+    strong.textContent = publisher;
     const meta = document.createElement("span");
-    meta.textContent = `${info.itemCount} 条资讯 · ${info.sourceCount} 个来源`;
+    meta.textContent = `${info.itemCount} 条资讯 · ${info.collectionCount} 个集合 · ${info.channelCount} 个渠道`;
+    const detail = document.createElement("small");
+    detail.textContent = [
+      info.familyLabels.join(" / "),
+      info.channelLabels.join(" / "),
+      info.collectionPreview
+    ].filter(Boolean).join(" · ");
     item.append(strong, meta);
+    if (detail.textContent) item.append(detail);
     return item;
   }));
 }
@@ -242,26 +311,32 @@ function updateCoverageDetail(baseItems) {
 function groupCoverage(items) {
   const map = new Map();
   for (const item of items) {
-    const key = item.siteName || item.sourceName || "未知平台";
-    const current = map.get(key) || { itemCount: 0, sources: new Set() };
+    const key = item.publisher || "未知发布方";
+    const current = map.get(key) || { itemCount: 0, families: new Set(), channels: new Set(), collections: new Set() };
     current.itemCount += 1;
-    if (item.sourceName) current.sources.add(item.sourceName);
+    if (item.family) current.families.add(item.family);
+    if (item.channel) current.channels.add(item.channel);
+    if (item.collection) current.collections.add(item.collection);
     map.set(key, current);
   }
   for (const value of map.values()) {
-    value.sourceCount = value.sources.size;
-    delete value.sources;
+    value.collectionCount = value.collections.size;
+    value.channelCount = value.channels.size;
+    value.familyLabels = [...value.families].sort(compareTaxonomyValues(labelFamily));
+    value.channelLabels = [...value.channels].sort(compareTaxonomyValues(labelChannel));
+    value.collectionPreview = [...value.collections].sort((a, b) => a.localeCompare(b, "zh-CN")).slice(0, 3).join(" · ");
   }
   return map;
 }
 
 function statusText(filteredCount, visibleCount, baseCount, warningText) {
-  const platformCount = new Set(getRangeItems().map((item) => item.siteName).filter(Boolean)).size;
-  const sourceCount = new Set(getRangeItems().map((item) => item.sourceName).filter(Boolean)).size;
+  const rangeItems = getRangeItems();
+  const publisherCount = uniqueCount(rangeItems.map((item) => item.publisher));
+  const collectionCount = uniqueCount(rangeItems.map((item) => item.collection));
   const prefix = visibleCount < filteredCount
     ? `显示前 ${visibleCount} 条，匹配 ${filteredCount} / ${baseCount} 条`
     : `显示 ${filteredCount} / ${baseCount} 条`;
-  return `${prefix}；覆盖 ${platformCount} 个平台、${sourceCount} 个来源${warningText}`;
+  return `${prefix}；覆盖 ${publisherCount} 个发布方、${collectionCount} 个集合${warningText}`;
 }
 
 function renderItem(item) {
@@ -275,9 +350,35 @@ function renderItem(item) {
   meta.className = "meta";
   const famTag = document.createElement("span");
   famTag.className = "fam-tag";
-  famTag.style.background = FAM_COLOR[item.sourceFamily] || FAM_COLOR.Unknown;
-  famTag.textContent = SOURCE_LABEL[item.sourceFamily] || item.sourceFamily;
-  meta.append(famTag, document.createTextNode([item.siteName, item.sourceName].filter(Boolean).join(" · ") || "未知来源"));
+  famTag.style.background = FAM_COLOR[item.family] || FAM_COLOR.unknown;
+  famTag.textContent = labelFamily(item.family);
+  meta.append(famTag);
+
+  if (item.channel) {
+    const channelTag = document.createElement("span");
+    channelTag.className = "meta-tag";
+    channelTag.textContent = labelChannel(item.channel);
+    meta.append(channelTag);
+  }
+
+  if (item.originType) {
+    const originTag = document.createElement("span");
+    originTag.className = "meta-tag";
+    originTag.textContent = item.originType;
+    meta.append(originTag);
+  }
+
+  const sourceText = document.createElement("span");
+  sourceText.className = "meta-text";
+  sourceText.textContent = [item.publisher, item.collection].filter(Boolean).join(" · ") || "未知发布方";
+  meta.append(sourceText);
+
+  if (item.language) {
+    const language = document.createElement("span");
+    language.className = "meta-note";
+    language.textContent = item.language;
+    meta.append(language);
+  }
 
   const heading = document.createElement("h2");
   const titleLink = document.createElement("a");
@@ -288,11 +389,12 @@ function renderItem(item) {
   heading.append(titleLink);
 
   const summary = document.createElement("p");
+  summary.className = "summary";
   summary.textContent = item.summary || "暂无摘要，打开原文查看。";
 
   const tags = document.createElement("div");
   tags.className = "tags";
-  for (const tag of item.tags || []) {
+  for (const tag of item.topic || []) {
     const span = document.createElement("span");
     span.className = "tag";
     span.textContent = tag;
@@ -311,17 +413,26 @@ function renderItem(item) {
     side.append(document.createElement("br"), score);
   }
 
-  body.append(meta, heading, summary, tags);
+  body.append(meta, heading, summary);
+  if (tags.childElementCount) body.append(tags);
   article.append(body, side);
   return article;
 }
 
-function matchesSource(item) {
-  return state.source === "all" || item.sourceFamily === state.source;
+function matchesFamily(item) {
+  return state.family === "all" || item.family === state.family;
 }
 
-function matchesPlatform(item) {
-  return state.platform === "all" || item.siteName === state.platform || item.sourceName === state.platform;
+function matchesChannel(item) {
+  return state.channel === "all" || item.channel === state.channel;
+}
+
+function matchesPublisher(item) {
+  return state.publisher === "all" || item.publisher === state.publisher;
+}
+
+function matchesTopic(item) {
+  return state.topic === "all" || item.topic.includes(state.topic);
 }
 
 function matchesQuery(item) {
@@ -329,17 +440,20 @@ function matchesQuery(item) {
   const haystack = [
     item.title,
     item.summary,
-    item.sourceFamily,
-    item.sourceName,
-    item.siteName,
-    ...(item.tags || [])
+    item.family,
+    item.channel,
+    item.publisher,
+    item.collection,
+    item.originType,
+    item.language,
+    ...(item.topic || [])
   ].join(" ").toLowerCase();
   return haystack.includes(state.query);
 }
 
 function compareItems(a, b) {
   if (state.sort === "score") return (b.score ?? -1) - (a.score ?? -1) || newest(a, b);
-  if (state.sort === "source") return `${labelFamily(a.sourceFamily)}${a.sourceName}`.localeCompare(`${labelFamily(b.sourceFamily)}${b.sourceName}`, "zh-CN") || newest(a, b);
+  if (state.sort === "publisher") return `${labelFamily(a.family)}${a.publisher}${labelChannel(a.channel)}`.localeCompare(`${labelFamily(b.family)}${b.publisher}${labelChannel(b.channel)}`, "zh-CN") || newest(a, b);
   return newest(a, b);
 }
 
@@ -348,7 +462,63 @@ function newest(a, b) {
 }
 
 function labelFamily(family) {
-  return SOURCE_LABEL[family] || family;
+  return FAMILY_LABEL[family] || family || "未知";
+}
+
+function labelChannel(channel) {
+  return CHANNEL_LABEL[channel] || channel || "未知渠道";
+}
+
+function normalizeItem(input) {
+  return {
+    id: cleanText(input.id) || crypto.randomUUID(),
+    title: cleanText(input.title) || "未命名资讯",
+    url: cleanText(input.url) || "#",
+    publishedAt: cleanText(input.publishedAt),
+    summary: cleanText(input.summary),
+    score: Number.isFinite(input.score) ? input.score : null,
+    family: cleanText(input.family) || "unknown",
+    channel: cleanText(input.channel) || "unknown",
+    publisher: cleanText(input.publisher) || "未知发布方",
+    collection: cleanText(input.collection),
+    topic: uniqueTexts(input.topic),
+    language: typeof input.language === "string" && input.language.trim() ? input.language.trim() : null,
+    originType: cleanText(input.originType)
+  };
+}
+
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function uniqueTexts(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(cleanText).filter(Boolean))];
+}
+
+function countBy(items, getKey) {
+  const counts = new Map();
+  for (const item of items) {
+    const key = getKey(item);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
+function uniqueCount(values) {
+  return new Set(values.filter(Boolean)).size;
+}
+
+function compareTaxonomyValues(label) {
+  return (a, b) => label(a).localeCompare(label(b), "zh-CN");
+}
+
+function resetTaxonomyFilters() {
+  state.family = "all";
+  state.channel = "all";
+  state.publisher = "all";
+  state.topic = "all";
 }
 
 function formatCompactDate(value) {

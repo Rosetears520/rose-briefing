@@ -21,10 +21,21 @@ GitHub Pages 静态 AI 资讯搜索站。初版目标是把公开资讯源聚合
 
 1. BestBlogs RSS：`https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80`
 2. SuYxh/ai-news-aggregator JSON：`https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json`
-3. 官方消息源：OpenAI、Google AI、Mistral、Microsoft AI、Qwen 等官方 RSS，以及 SuYxh OPML 中 AI 公司官方 X 账号
+3. 官方消息源：OpenAI、Google AI、Mistral、Microsoft AI、Qwen、Hugging Face Blog 等官方 RSS，以及 SuYxh OPML 中 AI 公司官方 X 账号
 4. SuYxh OPML 里的 X/Twitter RSS：`https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json` 中的 `api.xgo.ing` 源
 
 采集脚本会按 URL/标题去重，按时间倒序保留最多 7000 条。页面默认只渲染匹配结果的前 800 条，避免一次性渲染过多卡片导致浏览器变慢；搜索和筛选仍会作用于全部数据。
+
+当前发布的 `items.json` item 采用统一 canonical taxonomy 字段：
+
+- `id,title,url,publishedAt,summary,score`
+- `family`：`curated | official | community | aggregator`
+- `channel`：当前使用 `curated-rss | official-rss | official-social | community-social | aggregator-json`
+- `publisher`：实际组织 / 账号 / 出版物
+- `collection`：抓取到的 feed / bundle / container
+- `topic`：归一化后的多值主题标签数组
+- `language`：字符串或 `null`
+- `originType`：例如 `curated-secondary | direct-official | official-social | aggregated-hotlist | community-post`
 
 ## 本地运行
 

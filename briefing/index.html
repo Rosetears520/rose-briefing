@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rose Briefing</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=editorial-light-5" />
+    <link rel="stylesheet" href="styles.css?v=editorial-light-6" />
   </head>
   <body>
     <div class="wrap">
@@ -26,14 +26,14 @@
           <span><b id="item-count">--</b> 条资讯</span>
           <span id="coverage-line">加载中</span>
           <span id="generated-at">加载中</span>
-          <button id="coverage-detail-toggle" class="detail-link" type="button">来源详情 →</button>
+          <button id="coverage-detail-toggle" class="detail-link" type="button">覆盖详情 →</button>
         </div>
       </header>
 
-      <section id="coverage-detail" class="coverage-detail" hidden aria-label="来源详情">
+      <section id="coverage-detail" class="coverage-detail" hidden aria-label="覆盖详情">
         <div class="coverage-detail-inner">
           <div class="coverage-detail-head">
-            <strong id="coverage-detail-title">来源详情</strong>
+            <strong id="coverage-detail-title">覆盖详情</strong>
             <button id="coverage-detail-close" class="detail-close" type="button">收起</button>
           </div>
           <div id="coverage-detail-list" class="coverage-detail-list"></div>
@@ -83,24 +83,32 @@
           </div>
           <label class="search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-            <input id="search" type="search" placeholder="搜索关键词、来源、标签…" autocomplete="off" />
+            <input id="search" type="search" placeholder="搜索关键词、发布方、集合、话题…" autocomplete="off" />
           </label>
-          <select id="platform-filter" class="sel" aria-label="平台/站点">
-            <option value="all">全部平台</option>
-          </select>
           <select id="sort-order" class="sel" aria-label="排序">
             <option value="newest">最新优先</option>
             <option value="score">分数优先</option>
-            <option value="source">来源名称</option>
+            <option value="publisher">发布方</option>
           </select>
         </div>
-        <div class="chips" id="source-filter" role="group" aria-label="数据源"></div>
+        <div class="row row-filters">
+          <select id="channel-filter" class="sel" aria-label="渠道">
+            <option value="all">全部渠道</option>
+          </select>
+          <select id="publisher-filter" class="sel" aria-label="发布方">
+            <option value="all">全部发布方</option>
+          </select>
+          <select id="topic-filter" class="sel" aria-label="话题">
+            <option value="all">全部话题</option>
+          </select>
+        </div>
+        <div class="chips" id="family-filter" role="group" aria-label="内容家族"></div>
       </section>
 
       <p class="status" id="status" aria-live="polite">正在加载数据…</p>
       <section class="list" id="cards" aria-label="资讯列表"></section>
     </div>
 
-    <script type="module" src="app.js?v=editorial-light-5"></script>
+    <script type="module" src="app.js?v=editorial-light-6"></script>
   </body>
 </html>

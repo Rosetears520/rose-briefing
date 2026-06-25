@@ -98,10 +98,10 @@ graph TD
 
 - `update-data.mjs`
   - 抓取外部 RSS / JSON / xgo feed
-  - 标准化成统一 item 结构
+  - 标准化成统一 canonical item 结构
   - 去重
-  - 来源分类（BestBlogs / ai-news-aggregator / Official / X/Twitter）
-  - 失败兜底（复用上一版数据）
+  - 归一到 `family/channel/publisher/collection/topic/language/originType` taxonomy
+  - 失败兜底（复用上一版数据并迁移到新 schema）
   - 输出 `briefing/data/items.json`
 
 - `build.mjs`
@@ -133,11 +133,11 @@ graph TD
 graph LR
   A[BestBlogs RSS] --> U[update-data.mjs]
   B[ai-news-aggregator latest-7d.json] --> U
-  C[官方 RSS<br/>OpenAI / Google AI / Mistral / Microsoft / Qwen] --> U
+  C[官方 RSS<br/>OpenAI / Google AI / Mistral / Microsoft / Qwen / Hugging Face] --> U
   D[SuYxh opml-feeds.json] --> U
   D2[xgo RSS feeds] --> U
 
-  U --> N[标准化/去重/来源分类/失败兜底]
+  U --> N[标准化/去重/taxonomy 归一/失败兜底]
   N --> J[data/items.json]
 
   J --> F[app.js 前端过滤渲染]
@@ -156,26 +156,28 @@ graph LR
 2. **SuYxh / ai-news-aggregator `latest-7d.json`**
    - 提供大规模广覆盖资讯主体
 3. **Official RSS**
-   - 官方博客/新闻源
+   - 官方博客/新闻源（含 Hugging Face Blog）
 4. **SuYxh OPML 里的 xgo feeds**
-   - 一部分归 `Official`
-   - 一部分归 `X/Twitter`
+   - 一部分归 `official / official-social`
+   - 一部分归 `community / community-social`
 
 ### 4.2 中间处理
 
-`update-data.mjs` 会把所有外部源统一成同一个 item 结构：
+`update-data.mjs` 会把所有外部源统一成同一个 canonical item 结构：
 
 - `id`
 - `title`
 - `url`
-- `sourceFamily`
-- `sourceName`
-- `siteName`
 - `publishedAt`
 - `summary`
-- `tags`
 - `score`
-- `channel`（例如 `official-rss` / `official-x`）
+- `family`（`curated | official | community | aggregator`）
+- `channel`（例如 `curated-rss` / `official-rss` / `official-social` / `community-social` / `aggregator-json`）
+- `publisher`
+- `collection`
+- `topic`
+- `language`
+- `originType`
 
 ### 4.3 输出
 
@@ -306,17 +308,15 @@ node scripts/update-data.mjs
 抓回来之后，脚本会：
 
 1. 解析 RSS / JSON
-2. 把不同来源统一成一个 item 结构
+2. 把不同来源统一成一个 canonical item 结构
 3. 按 URL / 标题 key 去重
 4. 统一时间字段
-5. 给条目标注来源家族
+5. 给条目标注 taxonomy 字段
 
-来源家族目前有：
+当前主 taxonomy 是：
 
-- `BestBlogs`
-- `ai-news-aggregator`
-- `Official`
-- `X/Twitter`
+- `family`：`curated | aggregator | community | official`
+- `channel`：`curated-rss | aggregator-json | community-social | official-rss | official-social`
 
 ---
 
@@ -331,17 +331,17 @@ node scripts/update-data.mjs
 然后对失败来源做兜底：
 
 - 如果新抓结果不足最低阈值
-- 就尝试复用上一版同来源家族的数据
+- 就尝试复用上一版同 `family` 的数据
 
-特别是 `Official` 还会细分检查：
+特别是 `official` 还会细分检查：
 
 - `official-rss`
-- `official-x`
+- `official-social`
 
 避免出现：
 
-- 只剩官方 RSS，没有官方 X
-- 或只剩官方 X，没有官方 RSS
+- 只剩官方 RSS，没有官方社交源
+- 或只剩官方社交源，没有官方 RSS
 
 ---
 
@@ -402,25 +402,33 @@ node scripts/check.mjs
 - 条数不是 0
 - 总量至少达到合理阈值
 
-#### 来源覆盖
+#### taxonomy 覆盖
 
 - 必须有：
-  - `BestBlogs`
-  - `ai-news-aggregator`
-  - `X/Twitter`
-  - `Official`
+  - `curated`
+  - `aggregator`
+  - `community`
+  - `official`
 
 #### 官方源完整性
 
-- Official 总条数达标
-- Official RSS 条数达标
-- Official RSS feed 数量达标
-- Official X 条数达标
+- `official` 总条数达标
+- `official-rss` 条数达标
+- `official-rss` feed 数量达标
+- `official-social` 条数达标
+- `Hugging Face Blog` 不能从 source 清单或 `official-rss` 集合里静默消失
+
+#### family/channel 配对
+
+- `curated` 只能配 `curated-rss`
+- `aggregator` 只能配 `aggregator-json`
+- `community` 只能配 `community-social`
+- `official` 只能配 `official-rss` / `official-social`
 
 #### 安全性
 
 - URL 必须是 `http/https`
-- Official X 的链接必须匹配它自己的官方 handle
+- `official-social` 的链接必须匹配它自己的官方 handle
 
 #### 时间合理性
 
