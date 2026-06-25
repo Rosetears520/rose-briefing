@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rose Briefing</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=editorial-light-2" />
+    <link rel="stylesheet" href="styles.css?v=editorial-light-4" />
   </head>
   <body>
     <div class="wrap">
@@ -29,6 +29,41 @@
         </div>
       </header>
 
+      <section class="resources" aria-label="外部资源">
+        <div class="res-row">
+          <span class="res-tag">服务状态</span>
+          <a class="res-card" style="background:#eef3ff;border-color:#c3d2fd" href="https://status.deepseek.com/" target="_blank" rel="noopener noreferrer">
+            <span class="rc-dot" style="background:#4d6bfe"></span>
+            <span>DeepSeek</span>
+            <span class="rc-arr">↗</span>
+          </a>
+          <a class="res-card" style="background:#ecfdf7;border-color:#a7f3d4" href="https://status.openai.com/" target="_blank" rel="noopener noreferrer">
+            <span class="rc-dot" style="background:#10a37f"></span>
+            <span>OpenAI</span>
+            <span class="rc-arr">↗</span>
+          </a>
+          <a class="res-card" style="background:#fef4f1;border-color:#fed7cc" href="https://status.claude.com/" target="_blank" rel="noopener noreferrer">
+            <span class="rc-dot" style="background:#d97757"></span>
+            <span>Claude</span>
+            <span class="rc-arr">↗</span>
+          </a>
+
+          <span class="res-sep" aria-hidden="true"></span>
+
+          <span class="res-tag">赛博黄历</span>
+          <a class="res-card" style="background:#eef0ff;border-color:#d4d8ff" href="https://marginlab.ai/trackers/codex/" target="_blank" rel="noopener noreferrer">
+            <span class="rc-dot" style="background:#4f46e5"></span>
+            <span>Codex</span>
+            <span class="rc-arr">↗</span>
+          </a>
+          <a class="res-card" style="background:#f5f0ff;border-color:#ddd2f7" href="https://marginlab.ai/trackers/claude-code/" target="_blank" rel="noopener noreferrer">
+            <span class="rc-dot" style="background:#7c3aed"></span>
+            <span>Claude Code</span>
+            <span class="rc-arr">↗</span>
+          </a>
+        </div>
+      </section>
+
       <section class="bar" aria-label="搜索和过滤">
         <div class="row">
           <label class="search">
@@ -51,6 +86,6 @@
       <section class="list" id="cards" aria-label="资讯列表"></section>
     </div>
 
-    <script type="module" src="app.js?v=editorial-light-2"></script>
+    <script type="module" src="app.js?v=editorial-light-4"></script>
   </body>
 </html>

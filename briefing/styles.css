@@ -72,6 +72,37 @@ body {
 .byline { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 18px; color: var(--faint); font-size: 0.84rem; }
 .byline b { color: var(--ink); font-weight: 600; }
 
+/* external resources */
+.resources { padding: 24px 0 28px; border-bottom: 1px solid var(--line); }
+.res-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.res-tag {
+  color: var(--faint);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.res-sep { width: 1px; height: 18px; background: var(--line); margin: 0 6px; }
+.res-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 8px 14px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  transition: 0.15s;
+  border: 1px solid transparent;
+}
+.res-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
+.res-card .rc-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.res-card .rc-arr { color: var(--faint); font-size: 0.78rem; }
+.res-card:hover .rc-arr { color: var(--accent); }
+
 /* sticky controls */
 .bar {
   position: sticky;

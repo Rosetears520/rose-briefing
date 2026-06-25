@@ -28,6 +28,7 @@ const SOURCE_LABEL = {
 const elements = {
   count: document.querySelector("#item-count"),
   coverageLine: document.querySelector("#coverage-line"),
+  kicker: document.querySelector("#kicker"),
   generatedAt: document.querySelector("#generated-at"),
   search: document.querySelector("#search"),
   sourceFilter: document.querySelector("#source-filter"),
@@ -51,8 +52,11 @@ async function init() {
   const platformCount = new Set(state.items.map((item) => item.siteName).filter(Boolean)).size;
   const sourceCount = new Set(state.items.map((item) => item.sourceName).filter(Boolean)).size;
   elements.coverageLine.innerHTML = `覆盖 <b>${platformCount}</b> 个平台、<b>${sourceCount}</b> 个来源`;
-  elements.generatedAt.textContent = state.payload.generatedAt
-    ? `北京时间 ${formatDateTime(state.payload.generatedAt)} 更新`
+  elements.kicker.textContent = state.payload.generatedAt
+    ? `Daily Brief · ${formatIssueDate(state.payload.generatedAt)}`
+    : "Daily Brief";
+  elements.generatedAt.innerHTML = state.payload.generatedAt
+    ? `北京时间 <b>${formatDateTime(state.payload.generatedAt)}</b> 更新`
     : "未知更新时间";
 
   fillSourceChips(state.items);
@@ -274,4 +278,17 @@ function formatDateTime(value) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
+}
+
+function formatIssueDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: BEIJING_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  return `${map.year}.${map.month}.${map.day}`;
 }
