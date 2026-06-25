@@ -17,6 +17,7 @@ const MIN_OFFICIAL_RSS_ITEMS = 20;
 const MIN_OFFICIAL_SOCIAL_ITEMS = 50;
 const MAX_FETCH_BYTES = 8_000_000;
 const MAX_AI_NEWS_FUTURE_SKEW_MS = 60 * 60 * 1000;
+const MAX_RSS_FUTURE_SKEW_MS = 60 * 60 * 1000;
 const MIN_ITEMS_BY_FAMILY = {
   curated: 1,
   aggregator: 1000,
@@ -240,7 +241,7 @@ async function fetchBestBlogs() {
       id: readXmlTag(block, "guid") || `bestblogs-${index}`,
       title,
       url,
-      publishedAt: parseDate(readXmlTag(block, "pubDate")),
+      publishedAt: normalizeRssDate(readXmlTag(block, "pubDate")),
       summary: descriptionText,
       score: Number.isFinite(Number(scoreText)) ? Number(scoreText) : null,
       family: "curated",
@@ -314,7 +315,7 @@ async function fetchRssItems(url, defaults, limit) {
     id: readXmlTag(block, "guid") || readXmlTag(block, "link") || `${defaults.family}-${hash(`${url}-${index}`)}`,
     title: readXmlTag(block, "title"),
     url: readXmlTag(block, "link"),
-    publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
+    publishedAt: normalizeRssDate(readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date")),
     summary: readXmlTag(block, "description"),
     score: null,
     family: defaults.family,
@@ -383,7 +384,7 @@ async function fetchOneXgoFeed(feed) {
       id: readXmlTag(block, "guid") || `xgo-${hash(`${feed.url}-${index}`)}`,
       title,
       url: itemUrl,
-      publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
+      publishedAt: normalizeRssDate(readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date")),
       summary,
       score: null,
       family: officialItem ? "official" : "community",
@@ -454,6 +455,14 @@ function normalizeAiNewsDate(item) {
   }
 
   return firstSeenAt || lastSeenAt || publishedAt;
+}
+
+function normalizeRssDate(value) {
+  const publishedAt = parseDate(value);
+  if (!publishedAt) return "";
+  return dateValue(publishedAt) > Date.now() + MAX_RSS_FUTURE_SKEW_MS
+    ? new Date().toISOString()
+    : publishedAt;
 }
 
 function normalizeItem(input) {
