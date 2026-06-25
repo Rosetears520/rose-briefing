@@ -20,7 +20,7 @@ const FAM_COLOR = {
 };
 
 const SOURCE_LABEL = {
-  BestBlogs: "深度",
+  BestBlogs: "BestBlogs",
   Official: "官方",
   "X/Twitter": "社区/X",
   "ai-news-aggregator": "全网聚合"
