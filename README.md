@@ -21,7 +21,8 @@ GitHub Pages 静态 AI 资讯搜索站。初版目标是把公开资讯源聚合
 
 1. BestBlogs RSS：`https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80`
 2. SuYxh/ai-news-aggregator JSON：`https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json`
-3. SuYxh OPML 里的 X/Twitter RSS：`https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json` 中的 `api.xgo.ing` 源
+3. 官方消息源：OpenAI、Google AI、Mistral、Microsoft AI、Qwen 等官方 RSS，以及 SuYxh OPML 中 AI 公司官方 X 账号
+4. SuYxh OPML 里的 X/Twitter RSS：`https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json` 中的 `api.xgo.ing` 源
 
 采集脚本会按 URL/标题去重，按时间倒序保留最多 7000 条。页面默认只渲染匹配结果的前 800 条，避免一次性渲染过多卡片导致浏览器变慢；搜索和筛选仍会作用于全部数据。
 

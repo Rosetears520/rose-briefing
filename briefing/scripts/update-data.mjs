@@ -11,14 +11,27 @@ const outputPath = path.join(dataDir, "items.json");
 const MAX_ITEMS = 7000;
 const X_ITEMS_PER_FEED = 20;
 const X_FEED_CONCURRENCY = 8;
+const OFFICIAL_RSS_ITEMS_PER_FEED = 30;
+const MIN_OFFICIAL_RSS_FEEDS = 3;
+const MIN_OFFICIAL_RSS_ITEMS = 20;
+const MIN_OFFICIAL_X_ITEMS = 50;
+const MAX_FETCH_BYTES = 8_000_000;
 const MIN_ITEMS_BY_FAMILY = {
   BestBlogs: 1,
   "ai-news-aggregator": 1000,
-  "X/Twitter": 50
+  "X/Twitter": 50,
+  Official: 50
 };
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
 const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
 const SUYXH_OPML_FEEDS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json";
+const OFFICIAL_RSS_FEEDS = [
+  { org: "OpenAI", name: "OpenAI News", url: "https://openai.com/news/rss.xml" },
+  { org: "Google AI", name: "Google AI Blog", url: "https://blog.google/innovation-and-ai/technology/ai/rss/" },
+  { org: "Mistral AI", name: "Mistral AI News", url: "https://mistral.ai/rss.xml" },
+  { org: "Microsoft AI", name: "Microsoft AI", url: "https://news.microsoft.com/source/topics/ai/feed/" },
+  { org: "Qwen", name: "Qwen Blog", url: "https://qwenlm.github.io/blog/index.xml" }
+];
 
 const seedItems = [
   {
@@ -52,7 +65,7 @@ async function main() {
 
   const warnings = [];
   const existingItems = await readExistingItems();
-  const batches = await Promise.allSettled([fetchBestBlogs(), fetchAiNewsAggregator()]);
+  const batches = await Promise.allSettled([fetchBestBlogs(), fetchAiNewsAggregator(), fetchOfficialRssFeeds()]);
   batches.push(await settle(fetchXgoFeeds()));
   let items = [];
 
@@ -78,6 +91,8 @@ async function main() {
     }
   }
 
+  items = ensureOfficialSubsources(items, existingItems, warnings);
+
   let normalized = dedupe(items)
     .sort((a, b) => dateValue(b.publishedAt) - dateValue(a.publishedAt))
     .slice(0, MAX_ITEMS);
@@ -95,6 +110,7 @@ async function main() {
     sources: [
       { name: "BestBlogs", type: "rss", url: BESTBLOGS_RSS },
       { name: "ai-news-aggregator", type: "json", url: AI_NEWS_JSON },
+      ...OFFICIAL_RSS_FEEDS.map((feed) => ({ name: feed.name, type: "rss", url: feed.url })),
       { name: "X/Twitter via SuYxh OPML", type: "rss", url: SUYXH_OPML_FEEDS_JSON }
     ],
     warnings,
@@ -130,10 +146,57 @@ function assertRequiredSources(items) {
       throw new Error(`Source family ${expected} has only ${count} items; preserving existing data instead of publishing partial data.`);
     }
   }
+
+  const officialRssCount = countOfficialChannel(items, "official-rss");
+  if (officialRssCount < MIN_OFFICIAL_RSS_ITEMS) {
+    throw new Error(`Official RSS has only ${officialRssCount} items; preserving existing data instead of publishing partial data.`);
+  }
+  const officialRssFeeds = countOfficialRssFeeds(items);
+  if (officialRssFeeds < MIN_OFFICIAL_RSS_FEEDS) {
+    throw new Error(`Official RSS has only ${officialRssFeeds} feeds; preserving existing data instead of publishing partial data.`);
+  }
+  const officialXCount = countOfficialChannel(items, "official-x");
+  if (officialXCount < MIN_OFFICIAL_X_ITEMS) {
+    throw new Error(`Official X has only ${officialXCount} items; preserving existing data instead of publishing partial data.`);
+  }
+}
+
+function ensureOfficialSubsources(items, existingItems, warnings) {
+  const officialRssCount = countOfficialChannel(items, "official-rss");
+  const officialRssFeeds = countOfficialRssFeeds(items);
+  const officialXCount = countOfficialChannel(items, "official-x");
+  if (officialRssCount >= MIN_OFFICIAL_RSS_ITEMS && officialRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && officialXCount >= MIN_OFFICIAL_X_ITEMS) return items;
+
+  const existingOfficial = existingItems.filter((item) => item.sourceFamily === "Official");
+  const existingRssCount = countOfficialChannel(existingOfficial, "official-rss");
+  const existingRssFeeds = countOfficialRssFeeds(existingOfficial);
+  const existingXCount = countOfficialChannel(existingOfficial, "official-x");
+  if (existingRssCount >= MIN_OFFICIAL_RSS_ITEMS && existingRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && existingXCount >= MIN_OFFICIAL_X_ITEMS) {
+    warnings.push(`Official subsource coverage low (rss ${officialRssCount}/${officialRssFeeds} feeds, x ${officialXCount}); reused ${existingOfficial.length} existing official items`);
+    return [...items.filter((item) => item.sourceFamily !== "Official"), ...existingOfficial];
+  }
+
+  return items;
+}
+
+function countOfficialChannel(items, channel) {
+  return items.filter((item) => item.sourceFamily === "Official" && officialChannel(item) === channel).length;
+}
+
+function countOfficialRssFeeds(items) {
+  return new Set(items
+    .filter((item) => item.sourceFamily === "Official" && officialChannel(item) === "official-rss")
+    .map((item) => item.sourceName)
+    .filter(Boolean)).size;
+}
+
+function officialChannel(item) {
+  if (item.channel) return item.channel;
+  return isXPostUrl(item.url) ? "official-x" : "official-rss";
 }
 
 function requiredSourceFamilies() {
-  return ["BestBlogs", "ai-news-aggregator", "X/Twitter"];
+  return ["BestBlogs", "ai-news-aggregator", "X/Twitter", "Official"];
 }
 
 async function settle(promise) {
@@ -196,6 +259,48 @@ async function fetchAiNewsAggregator() {
   return { items, warnings };
 }
 
+async function fetchOfficialRssFeeds() {
+  const feedResults = await mapWithConcurrency(OFFICIAL_RSS_FEEDS, 4, async (feed) => {
+    const items = await fetchRssItems(feed.url, {
+      sourceFamily: "Official",
+      siteName: feed.org,
+      sourceName: feed.name,
+      channel: "official-rss",
+      tags: ["Official", feed.org]
+    }, OFFICIAL_RSS_ITEMS_PER_FEED);
+    return { items };
+  });
+
+  const items = [];
+  const failures = [];
+  for (const result of feedResults) {
+    if (result.status === "fulfilled") items.push(...result.value.items);
+    else failures.push(result.reason?.message ?? String(result.reason));
+  }
+
+  const warnings = [`Official RSS: ${items.length} items from ${OFFICIAL_RSS_FEEDS.length - failures.length}/${OFFICIAL_RSS_FEEDS.length} feeds`];
+  if (failures.length > 0) warnings.push(`Official RSS failed feeds: ${failures.length}`);
+  return { items, warnings };
+}
+
+async function fetchRssItems(url, defaults, limit) {
+  const xml = await fetchText(url);
+  const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
+  return itemBlocks.slice(0, limit).map((block, index) => normalizeItem({
+    id: readXmlTag(block, "guid") || readXmlTag(block, "link") || `${defaults.sourceFamily}-${hash(`${url}-${index}`)}`,
+    title: readXmlTag(block, "title"),
+    url: readXmlTag(block, "link"),
+    sourceFamily: defaults.sourceFamily,
+    sourceName: defaults.sourceName,
+    siteName: defaults.siteName,
+    channel: defaults.channel,
+    publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
+    summary: readXmlTag(block, "description"),
+    tags: [...defaults.tags, readXmlTag(block, "category")].filter(Boolean),
+    score: null
+  })).filter(Boolean);
+}
+
 async function fetchXgoFeeds() {
   const groups = await fetchJson(SUYXH_OPML_FEEDS_JSON);
   const feeds = flattenXgoFeeds(groups);
@@ -211,7 +316,9 @@ async function fetchXgoFeeds() {
     }
   }
 
-  const warnings = [`X/Twitter via xgo: ${items.length} items from ${feeds.length - failures.length}/${feeds.length} feeds`];
+  const officialCount = items.filter((item) => item.sourceFamily === "Official").length;
+  const xCount = items.filter((item) => item.sourceFamily === "X/Twitter").length;
+  const warnings = [`xgo feeds: ${officialCount} official items, ${xCount} X/Twitter items from ${feeds.length - failures.length}/${feeds.length} feeds`];
   if (failures.length > 0) warnings.push(`X/Twitter failed feeds: ${failures.length}`);
   return { items, warnings };
 }
@@ -240,20 +347,60 @@ function isSafeXgoFeedUrl(value) {
 async function fetchOneXgoFeed(feed) {
   const xml = await fetchText(feed.url);
   const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
-  const items = itemBlocks.slice(0, X_ITEMS_PER_FEED).map((block, index) => normalizeItem({
-    id: readXmlTag(block, "guid") || `xgo-${hash(`${feed.url}-${index}`)}`,
-    title: readXmlTag(block, "title"),
-    url: readXmlTag(block, "link"),
-    sourceFamily: "X/Twitter",
-    sourceName: feed.name,
-    siteName: feed.groupName,
-    publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
-    summary: readXmlTag(block, "description"),
-    tags: [feed.groupName, feed.name, "X/Twitter"],
-    score: null
-  })).filter(Boolean);
+  const official = isOfficialXgoFeed(feed);
+  const items = itemBlocks.slice(0, X_ITEMS_PER_FEED).map((block, index) => {
+    const itemUrl = readXmlTag(block, "link");
+    const officialItem = official && isOfficialXgoItemUrl(feed, itemUrl);
+    return normalizeItem({
+      id: readXmlTag(block, "guid") || `xgo-${hash(`${feed.url}-${index}`)}`,
+      title: readXmlTag(block, "title"),
+      url: itemUrl,
+      sourceFamily: officialItem ? "Official" : "X/Twitter",
+      sourceName: feed.name,
+      siteName: officialItem ? officialSiteName(feed) : feed.groupName,
+      channel: officialItem ? "official-x" : "xgo",
+      publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
+      summary: readXmlTag(block, "description"),
+      tags: [feed.groupName, feed.name, "X/Twitter", officialItem ? "Official" : ""].filter(Boolean),
+      score: null
+    });
+  }).filter(Boolean);
 
   return { items };
+}
+
+function isOfficialXgoFeed(feed) {
+  return ["AI Companies", "中国AI公司"].includes(feed.groupName);
+}
+
+function officialSiteName(feed) {
+  return cleanText(feed.name).replace(/\s*\(@.*?\)\s*$/, "") || feed.groupName;
+}
+
+function officialHandle(feed) {
+  const match = cleanText(feed.name).match(/@([A-Za-z0-9_]+)/);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function isOfficialXgoItemUrl(feed, value) {
+  const handle = officialHandle(feed);
+  if (!handle) return false;
+  try {
+    const parsed = new URL(decodeEntities(String(value)).trim());
+    if (!["x.com", "twitter.com"].includes(parsed.hostname.toLowerCase())) return false;
+    return parsed.pathname.split("/").filter(Boolean)[0]?.toLowerCase() === handle;
+  } catch {
+    return false;
+  }
+}
+
+function isXPostUrl(value) {
+  try {
+    const parsed = new URL(String(value));
+    return ["x.com", "twitter.com"].includes(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 async function mapWithConcurrency(values, concurrency, mapper) {
@@ -332,7 +479,10 @@ async function fetchText(url) {
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { "user-agent": "rose-briefing/0.1" } });
     if (!response.ok) throw new Error(`${url} returned ${response.status}`);
-    return await response.text();
+    const text = await response.text();
+    const byteLength = Buffer.byteLength(text, "utf8");
+    if (byteLength > MAX_FETCH_BYTES) throw new Error(`${url} returned ${byteLength} bytes, above ${MAX_FETCH_BYTES}`);
+    return text;
   } finally {
     clearTimeout(timer);
   }
