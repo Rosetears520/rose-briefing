@@ -8,60 +8,61 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="hero">
-      <div>
-        <p class="eyebrow">Rose Briefing</p>
-        <h1>AI 资讯静态搜索站</h1>
-        <p class="subtitle">聚合 BestBlogs 与 ai-news-aggregator，部署在 GitHub Pages，自己搜索自己看。</p>
+    <div class="wrap">
+      <div class="topbar">
+        <div class="brand"><span class="dot"></span>Rose Briefing <span class="sub">/ AI 资讯</span></div>
+        <nav>
+          <a href="#" id="nav-latest">最新</a>
+          <a href="#" id="nav-official">官方</a>
+          <a href="https://github.com/Rosetears520/rose-briefing" target="_blank" rel="noopener noreferrer">源码</a>
+        </nav>
       </div>
-      <div class="hero-card" aria-live="polite">
-        <span id="item-count">--</span>
-        <small>条资讯</small>
-        <small id="generated-at">加载中</small>
-      </div>
-    </header>
 
-    <main class="shell">
-      <section class="controls" aria-label="搜索和过滤">
-        <label class="search-box">
-          <span>搜索</span>
-          <input id="search" type="search" placeholder="关键词、来源、标签…" autocomplete="off" />
-        </label>
-        <label>
-          <span>数据源</span>
-          <select id="source-filter">
-            <option value="all">全部来源</option>
-          </select>
-        </label>
-        <label>
-          <span>平台/站点</span>
-          <select id="platform-filter">
+      <header class="masthead">
+        <p class="kicker" id="kicker">Rose Briefing</p>
+        <h1>每一天的 AI,<br />值得一读的部分。</h1>
+        <p class="lead">从官方公告、高质量专栏到全网热点与 X 上的声音——收拢成一份可搜索的简报，安静地等你来读。</p>
+        <div class="byline">
+          <span><b id="item-count">--</b> 条资讯</span>
+          <span id="coverage-line">加载中</span>
+          <span id="generated-at">加载中</span>
+        </div>
+      </header>
+
+      <section class="bar" aria-label="搜索和过滤">
+        <div class="row">
+          <label class="search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+            <input id="search" type="search" placeholder="搜索关键词、来源、标签…" autocomplete="off" />
+          </label>
+          <select id="platform-filter" class="sel" aria-label="平台/站点">
             <option value="all">全部平台</option>
           </select>
-        </label>
-        <label>
-          <span>排序</span>
-          <select id="sort-order">
+          <select id="sort-order" class="sel" aria-label="排序">
             <option value="newest">最新优先</option>
-            <option value="score">BestBlogs 分数优先</option>
+            <option value="score">分数优先</option>
             <option value="source">来源名称</option>
           </select>
-        </label>
+        </div>
+        <div class="chips" id="source-filter" role="group" aria-label="数据源"></div>
       </section>
 
-      <section class="status" id="status" aria-live="polite">正在加载数据…</section>
-      <section class="cards" id="cards" aria-label="资讯列表"></section>
-    </main>
+      <p class="status" id="status" aria-live="polite">正在加载数据…</p>
+      <section class="list" id="cards" aria-label="资讯列表"></section>
 
-    <template id="card-template">
-      <article class="card">
-        <div class="card-meta"></div>
-        <h2></h2>
-        <p class="summary"></p>
-        <div class="tags"></div>
-        <a class="read-link" target="_blank" rel="noopener noreferrer">打开原文</a>
-      </article>
-    </template>
+      <template id="card-template">
+        <article class="item">
+          <span class="gd" aria-hidden="true"></span>
+          <div class="body">
+            <div class="meta"></div>
+            <h2><a class="title-link" target="_blank" rel="noopener noreferrer"></a></h2>
+            <p class="summary"></p>
+            <div class="tags"></div>
+          </div>
+          <div class="side"></div>
+        </article>
+      </template>
+    </div>
 
     <script type="module" src="app.js"></script>
   </body>

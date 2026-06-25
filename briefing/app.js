@@ -10,15 +10,31 @@ const state = {
 const DISPLAY_LIMIT = 800;
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
+const FAM_COLOR = {
+  BestBlogs: "var(--fam-BestBlogs)",
+  Official: "var(--fam-Official)",
+  "X/Twitter": "var(--fam-X)",
+  "ai-news-aggregator": "var(--fam-ai)",
+  Unknown: "var(--fam-Unknown)"
+};
+
+const SOURCE_LABEL = {
+  "ai-news-aggregator": "ai-news",
+  "X/Twitter": "X/Twitter",
+  Official: "官方",
+  BestBlogs: "BestBlogs"
+};
+
 const elements = {
   count: document.querySelector("#item-count"),
+  coverageLine: document.querySelector("#coverage-line"),
   generatedAt: document.querySelector("#generated-at"),
   search: document.querySelector("#search"),
   sourceFilter: document.querySelector("#source-filter"),
   platformFilter: document.querySelector("#platform-filter"),
   sortOrder: document.querySelector("#sort-order"),
   status: document.querySelector("#status"),
-  cards: document.querySelector("#cards"),
+  list: document.querySelector("#cards"),
   template: document.querySelector("#card-template")
 };
 
@@ -33,9 +49,14 @@ async function init() {
   state.items = Array.isArray(state.payload.items) ? state.payload.items : [];
 
   elements.count.textContent = String(state.items.length);
-  elements.generatedAt.textContent = state.payload.generatedAt ? `更新于 ${formatDateTime(state.payload.generatedAt)}` : "未知更新时间";
+  const platformCount = new Set(state.items.map((item) => item.siteName).filter(Boolean)).size;
+  const sourceCount = new Set(state.items.map((item) => item.sourceName).filter(Boolean)).size;
+  elements.coverageLine.innerHTML = `覆盖 <b>${platformCount}</b> 个平台、<b>${sourceCount}</b> 个来源`;
+  elements.generatedAt.textContent = state.payload.generatedAt
+    ? `北京时间 ${formatDateTime(state.payload.generatedAt)} 更新`
+    : "未知更新时间";
 
-  fillSourceOptions(state.items);
+  fillSourceChips(state.items);
   fillPlatformOptions(state.items);
   bindControls();
   render();
@@ -46,8 +67,11 @@ function bindControls() {
     state.query = elements.search.value.trim().toLowerCase();
     render();
   });
-  elements.sourceFilter.addEventListener("change", () => {
-    state.source = elements.sourceFilter.value;
+  elements.sourceFilter.addEventListener("click", (event) => {
+    const chip = event.target.closest(".chip");
+    if (!chip) return;
+    state.source = chip.dataset.src;
+    elements.sourceFilter.querySelectorAll(".chip").forEach((node) => node.classList.toggle("on", node === chip));
     render();
   });
   elements.platformFilter.addEventListener("change", () => {
@@ -58,16 +82,34 @@ function bindControls() {
     state.sort = elements.sortOrder.value;
     render();
   });
+  document.querySelector("#nav-latest")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    selectSource("all");
+  });
+  document.querySelector("#nav-official")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    selectSource("Official");
+  });
 }
 
-function fillSourceOptions(items) {
-  const sources = [...new Set(items.map((item) => item.sourceFamily).filter(Boolean))].sort();
-  for (const source of sources) {
-    const option = document.createElement("option");
-    option.value = source;
-    option.textContent = source;
-    elements.sourceFilter.append(option);
-  }
+function selectSource(value) {
+  state.source = value;
+  elements.sourceFilter.querySelectorAll(".chip").forEach((node) => node.classList.toggle("on", node.dataset.src === value));
+  render();
+}
+
+function fillSourceChips(items) {
+  const families = [...new Set(items.map((item) => item.sourceFamily).filter(Boolean))].sort();
+  const order = ["BestBlogs", "Official", "X/Twitter", "ai-news-aggregator"].filter((f) => families.includes(f));
+  const chips = [{ src: "all", label: "全部" }, ...order.map((src) => ({ src, label: SOURCE_LABEL[src] || src }))];
+  elements.sourceFilter.replaceChildren(...chips.map((c) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip" + (c.src === "all" ? " on" : "");
+    button.dataset.src = c.src;
+    button.textContent = c.label;
+    return button;
+  }));
 }
 
 function fillPlatformOptions(items) {
@@ -89,7 +131,16 @@ function render() {
     .sort(compareItems);
 
   const visible = filtered.slice(0, DISPLAY_LIMIT);
-  elements.cards.replaceChildren(...visible.map(renderCard));
+  if (visible.length === 0) {
+    elements.list.replaceChildren();
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "没有匹配结果";
+    elements.list.append(empty);
+  } else {
+    elements.list.replaceChildren(...visible.map(renderItem));
+  }
+
   const warningText = state.payload?.warnings?.length ? `；提示：${state.payload.warnings.join("；")}` : "";
   elements.status.textContent = filtered.length === 0
     ? `没有匹配结果${warningText}`
@@ -105,41 +156,51 @@ function statusText(filteredCount, visibleCount, warningText) {
   return `${prefix}；覆盖 ${platformCount} 个平台、${sourceCount} 个来源${warningText}`;
 }
 
-function renderCard(item) {
+function renderItem(item) {
   const fragment = elements.template.content.cloneNode(true);
-  const article = fragment.querySelector(".card");
-  const meta = fragment.querySelector(".card-meta");
-  const title = fragment.querySelector("h2");
+  const article = fragment.querySelector(".item");
+  const gd = fragment.querySelector(".gd");
+  const meta = fragment.querySelector(".meta");
+  const titleLink = fragment.querySelector(".title-link");
   const summary = fragment.querySelector(".summary");
   const tags = fragment.querySelector(".tags");
-  const link = fragment.querySelector(".read-link");
+  const side = fragment.querySelector(".side");
 
-  meta.append(
-    pill(item.sourceFamily),
-    textMeta([item.siteName, item.sourceName].filter(Boolean).join(" · ") || "未知来源"),
-    textMeta(formatDate(item.publishedAt))
-  );
-  if (Number.isFinite(item.score)) meta.append(pill(`分数 ${item.score}`));
+  const color = FAM_COLOR[item.sourceFamily] || FAM_COLOR.Unknown;
+  gd.style.background = color;
 
-  title.textContent = item.title;
+  const fam = document.createElement("span");
+  fam.className = "fam";
+  fam.style.color = color;
+  fam.textContent = SOURCE_LABEL[item.sourceFamily] || item.sourceFamily;
+  meta.append(fam, textNode([item.siteName, item.sourceName].filter(Boolean).join(" · ") || "未知来源"));
+
+  titleLink.textContent = item.title;
+  titleLink.href = item.url;
   summary.textContent = item.summary || "暂无摘要，打开原文查看。";
-  for (const tag of item.tags || []) tags.append(pill(tag, "tag"));
-  link.href = item.url;
+  for (const tag of item.tags || []) {
+    const span = document.createElement("span");
+    span.className = "tag";
+    span.textContent = tag;
+    tags.append(span);
+  }
+
+  const time = document.createElement("span");
+  time.textContent = formatDate(item.publishedAt);
+  side.append(time);
+  if (Number.isFinite(item.score)) {
+    const score = document.createElement("span");
+    score.className = "score";
+    score.textContent = `${item.score}`;
+    side.append(document.createElement("br"), score);
+  }
+
   article.dataset.source = item.sourceFamily;
   return fragment;
 }
 
-function pill(text, className = "pill") {
-  const span = document.createElement("span");
-  span.className = className;
-  span.textContent = text;
-  return span;
-}
-
-function textMeta(text) {
-  const span = document.createElement("span");
-  span.textContent = text;
-  return span;
+function textNode(text) {
+  return document.createTextNode(text);
 }
 
 function matchesSource(item) {
@@ -188,9 +249,9 @@ function formatDate(value) {
 function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "未知";
-  return `北京时间 ${new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat("zh-CN", {
     timeZone: BEIJING_TIME_ZONE,
     dateStyle: "medium",
     timeStyle: "short"
-  }).format(date)}`;
+  }).format(date);
 }

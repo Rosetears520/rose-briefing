@@ -80,7 +80,7 @@ for (const item of payload.items) {
 }
 
 const index = await readFile(path.join(rootDir, "index.html"), "utf8");
-if (/https?:\/\//.test(index)) {
+if (/<(?:script|link|style)[^>]+(?:src|href)\s*=\s*["']https?:\/\//i.test(index)) {
   throw new Error("index.html should not depend on external scripts/styles");
 }
 
