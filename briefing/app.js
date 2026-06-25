@@ -3,14 +3,19 @@ const state = {
   items: [],
   query: "",
   source: "all",
+  platform: "all",
   sort: "newest"
 };
+
+const DISPLAY_LIMIT = 800;
+const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 const elements = {
   count: document.querySelector("#item-count"),
   generatedAt: document.querySelector("#generated-at"),
   search: document.querySelector("#search"),
   sourceFilter: document.querySelector("#source-filter"),
+  platformFilter: document.querySelector("#platform-filter"),
   sortOrder: document.querySelector("#sort-order"),
   status: document.querySelector("#status"),
   cards: document.querySelector("#cards"),
@@ -31,6 +36,7 @@ async function init() {
   elements.generatedAt.textContent = state.payload.generatedAt ? `更新于 ${formatDateTime(state.payload.generatedAt)}` : "未知更新时间";
 
   fillSourceOptions(state.items);
+  fillPlatformOptions(state.items);
   bindControls();
   render();
 }
@@ -42,6 +48,10 @@ function bindControls() {
   });
   elements.sourceFilter.addEventListener("change", () => {
     state.source = elements.sourceFilter.value;
+    render();
+  });
+  elements.platformFilter.addEventListener("change", () => {
+    state.platform = elements.platformFilter.value;
     render();
   });
   elements.sortOrder.addEventListener("change", () => {
@@ -60,17 +70,39 @@ function fillSourceOptions(items) {
   }
 }
 
+function fillPlatformOptions(items) {
+  const platforms = [...new Set(items.map((item) => item.siteName || item.sourceName).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "zh-CN"));
+  for (const platform of platforms) {
+    const option = document.createElement("option");
+    option.value = platform;
+    option.textContent = platform;
+    elements.platformFilter.append(option);
+  }
+}
+
 function render() {
   const filtered = state.items
     .filter(matchesSource)
+    .filter(matchesPlatform)
     .filter(matchesQuery)
     .sort(compareItems);
 
-  elements.cards.replaceChildren(...filtered.map(renderCard));
+  const visible = filtered.slice(0, DISPLAY_LIMIT);
+  elements.cards.replaceChildren(...visible.map(renderCard));
   const warningText = state.payload?.warnings?.length ? `；提示：${state.payload.warnings.join("；")}` : "";
   elements.status.textContent = filtered.length === 0
     ? `没有匹配结果${warningText}`
-    : `显示 ${filtered.length} / ${state.items.length} 条${warningText}`;
+    : statusText(filtered.length, visible.length, warningText);
+}
+
+function statusText(filteredCount, visibleCount, warningText) {
+  const sourceCount = new Set(state.items.map((item) => item.sourceName).filter(Boolean)).size;
+  const platformCount = new Set(state.items.map((item) => item.siteName).filter(Boolean)).size;
+  const prefix = visibleCount < filteredCount
+    ? `显示前 ${visibleCount} 条，匹配 ${filteredCount} / ${state.items.length} 条`
+    : `显示 ${filteredCount} / ${state.items.length} 条`;
+  return `${prefix}；覆盖 ${platformCount} 个平台、${sourceCount} 个来源${warningText}`;
 }
 
 function renderCard(item) {
@@ -84,8 +116,8 @@ function renderCard(item) {
 
   meta.append(
     pill(item.sourceFamily),
-    document.createTextNode(item.sourceName || item.siteName || "未知来源"),
-    document.createTextNode(formatDate(item.publishedAt))
+    textMeta([item.siteName, item.sourceName].filter(Boolean).join(" · ") || "未知来源"),
+    textMeta(formatDate(item.publishedAt))
   );
   if (Number.isFinite(item.score)) meta.append(pill(`分数 ${item.score}`));
 
@@ -104,8 +136,18 @@ function pill(text, className = "pill") {
   return span;
 }
 
+function textMeta(text) {
+  const span = document.createElement("span");
+  span.textContent = text;
+  return span;
+}
+
 function matchesSource(item) {
   return state.source === "all" || item.sourceFamily === state.source;
+}
+
+function matchesPlatform(item) {
+  return state.platform === "all" || item.siteName === state.platform || item.sourceName === state.platform;
 }
 
 function matchesQuery(item) {
@@ -134,11 +176,21 @@ function newest(a, b) {
 function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "未知时间";
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+  return `北京时间 ${new Intl.DateTimeFormat("zh-CN", {
+    timeZone: BEIJING_TIME_ZONE,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date)}`;
 }
 
 function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "未知";
-  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return `北京时间 ${new Intl.DateTimeFormat("zh-CN", {
+    timeZone: BEIJING_TIME_ZONE,
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date)}`;
 }

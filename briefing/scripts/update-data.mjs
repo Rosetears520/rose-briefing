@@ -8,9 +8,9 @@ const rootDir = path.resolve(__dirname, "..");
 const dataDir = path.join(rootDir, "data");
 const outputPath = path.join(dataDir, "items.json");
 
-const MAX_ITEMS = 700;
+const MAX_ITEMS = 5500;
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
-const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-24h.json";
+const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
 
 const seedItems = [
   {
@@ -33,7 +33,7 @@ const seedItems = [
     sourceName: "SuYxh/ai-news-aggregator",
     siteName: "ai-news-aggregator",
     publishedAt: new Date().toISOString(),
-    summary: "运行 npm run update 后会拉取 latest-24h.json。",
+    summary: "运行 npm run update 后会拉取 latest-7d.json。",
     tags: ["AI", "JSON"],
     score: null
   }
@@ -43,6 +43,7 @@ async function main() {
   await mkdir(dataDir, { recursive: true });
 
   const warnings = [];
+  const existingItems = await readExistingItems();
   const batches = await Promise.allSettled([fetchBestBlogs(), fetchAiNewsAggregator()]);
   const items = [];
 
@@ -55,6 +56,16 @@ async function main() {
     }
   }
 
+  for (const family of ["BestBlogs", "ai-news-aggregator"]) {
+    if (!items.some((item) => item.sourceFamily === family)) {
+      const fallbackItems = existingItems.filter((item) => item.sourceFamily === family);
+      if (fallbackItems.length > 0) {
+        items.push(...fallbackItems);
+        warnings.push(`${family} fetch failed; reused ${fallbackItems.length} existing items`);
+      }
+    }
+  }
+
   let normalized = dedupe(items)
     .sort((a, b) => dateValue(b.publishedAt) - dateValue(a.publishedAt))
     .slice(0, MAX_ITEMS);
@@ -62,6 +73,8 @@ async function main() {
   if (normalized.length === 0) {
     throw new Error("No live items were fetched; preserving existing data instead of publishing seed data.");
   }
+
+  assertRequiredSources(normalized);
 
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -79,6 +92,25 @@ async function main() {
   console.log(`Wrote ${normalized.length} items to ${path.relative(process.cwd(), outputPath)}`);
   if (warnings.length > 0) {
     console.warn(`Warnings: ${warnings.join(" | ")}`);
+  }
+}
+
+async function readExistingItems() {
+  if (!existsSync(outputPath)) return [];
+  try {
+    const payload = JSON.parse(await readFile(outputPath, "utf8"));
+    return Array.isArray(payload.items) ? payload.items : [];
+  } catch {
+    return [];
+  }
+}
+
+function assertRequiredSources(items) {
+  const families = new Set(items.map((item) => item.sourceFamily));
+  for (const expected of ["BestBlogs", "ai-news-aggregator"]) {
+    if (!families.has(expected)) {
+      throw new Error(`Missing required source family ${expected}; preserving existing data instead of publishing partial data.`);
+    }
   }
 }
 
@@ -121,15 +153,22 @@ async function fetchAiNewsAggregator() {
     sourceFamily: "ai-news-aggregator",
     sourceName: item.source || item.site_name || "ai-news-aggregator",
     siteName: item.site_name || item.site_id || "ai-news-aggregator",
-    publishedAt: item.published_at || item.first_seen_at || item.last_seen_at,
+    publishedAt: normalizeAiNewsDate(item),
     summary: item.title_original && item.title_original !== item.title ? item.title_original : "",
     tags: [item.site_name, item.source].filter(Boolean),
     score: null
   })).filter(Boolean);
 
   const warnings = [];
-  if (data.generated_at) warnings.push(`ai-news-aggregator generated at ${data.generated_at}`);
+  if (data.generated_at) {
+    warnings.push(`ai-news-aggregator latest-7d: ${rawItems.length} raw items, ${data.site_count ?? "?"} platforms, ${data.source_count ?? "?"} sources`);
+  }
   return { items, warnings };
+}
+
+function normalizeAiNewsDate(item) {
+  if (item.published_at) return parseBeijingWallTime(item.published_at);
+  return item.first_seen_at || item.last_seen_at;
 }
 
 function normalizeItem(input) {
@@ -173,9 +212,7 @@ function mergeItems(a, b) {
   const older = newer === b ? a : b;
   return {
     ...newer,
-    sourceName: [...new Set([a.sourceName, b.sourceName].filter(Boolean))].join(" / "),
-    siteName: [...new Set([a.siteName, b.siteName].filter(Boolean))].join(" / "),
-    tags: [...new Set([...a.tags, ...b.tags])].slice(0, 10),
+    tags: [...new Set([...a.tags, ...b.tags, older.siteName, older.sourceName].filter(Boolean))].slice(0, 10),
     summary: newer.summary || older.summary,
     score: newer.score ?? older.score
   };
@@ -255,6 +292,13 @@ function parseDate(value) {
   if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function parseBeijingWallTime(value) {
+  if (!value) return "";
+  const withoutZone = String(value).trim().replace(/(?:Z|[+-]\d{2}:?\d{2})$/, "");
+  const normalized = withoutZone.includes("T") ? withoutZone : withoutZone.replace(" ", "T");
+  return parseDate(`${normalized}+08:00`);
 }
 
 function dateValue(value) {

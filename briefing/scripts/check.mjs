@@ -23,10 +23,30 @@ for (const relativePath of required) {
 const payload = JSON.parse(await readFile(path.join(rootDir, "data/items.json"), "utf8"));
 if (!Array.isArray(payload.items)) throw new Error("data/items.json must contain an items array");
 if (payload.items.length === 0) throw new Error("data/items.json has no items");
+if (payload.items.length < 1000) throw new Error(`Expected expanded data set, got only ${payload.items.length} items`);
 
 const sourceFamilies = new Set(payload.items.map((item) => item.sourceFamily));
 for (const expected of ["BestBlogs", "ai-news-aggregator"]) {
   if (!sourceFamilies.has(expected)) throw new Error(`Missing expected source family: ${expected}`);
+}
+
+const aggregatorPlatforms = new Set(
+  payload.items
+    .filter((item) => item.sourceFamily === "ai-news-aggregator")
+    .map((item) => item.siteName)
+    .filter(Boolean)
+);
+if (aggregatorPlatforms.size < 8) {
+  throw new Error(`Expected broad ai-news-aggregator platform coverage, got ${aggregatorPlatforms.size}`);
+}
+
+const generatedAt = new Date(payload.generatedAt).getTime();
+if (!Number.isNaN(generatedAt)) {
+  const maxFutureSkewMs = 60 * 60 * 1000;
+  const futureItem = payload.items.find((item) => new Date(item.publishedAt).getTime() > generatedAt + maxFutureSkewMs);
+  if (futureItem) {
+    throw new Error(`Item publishedAt is unexpectedly after generatedAt: ${futureItem.title} (${futureItem.publishedAt})`);
+  }
 }
 
 for (const item of payload.items) {
