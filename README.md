@@ -44,9 +44,15 @@ python3 -m http.server 4173 -d dist
 
 - push 到 `main`
 - 手动运行 workflow
-- 每小时整点定时运行
+- 每 80 分钟定时运行
 
 仓库 Settings → Pages 的 Source 需要选择 **GitHub Actions**。
+
+## 技术文档
+
+- `docs/system-architecture-and-update-flow.md`
+  - 系统架构图版（模块图 + 数据流图）
+  - 从一次更新开始到上线结束的时序版
 
 ## 后续可选增强
 
