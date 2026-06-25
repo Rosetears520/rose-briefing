@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rose Briefing</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=editorial-light-4" />
+    <link rel="stylesheet" href="styles.css?v=editorial-light-5" />
   </head>
   <body>
     <div class="wrap">
@@ -26,8 +26,19 @@
           <span><b id="item-count">--</b> 条资讯</span>
           <span id="coverage-line">加载中</span>
           <span id="generated-at">加载中</span>
+          <button id="coverage-detail-toggle" class="detail-link" type="button">来源详情 →</button>
         </div>
       </header>
+
+      <section id="coverage-detail" class="coverage-detail" hidden aria-label="来源详情">
+        <div class="coverage-detail-inner">
+          <div class="coverage-detail-head">
+            <strong id="coverage-detail-title">来源详情</strong>
+            <button id="coverage-detail-close" class="detail-close" type="button">收起</button>
+          </div>
+          <div id="coverage-detail-list" class="coverage-detail-list"></div>
+        </div>
+      </section>
 
       <section class="resources" aria-label="外部资源">
         <div class="res-row">
@@ -66,6 +77,10 @@
 
       <section class="bar" aria-label="搜索和过滤">
         <div class="row">
+          <div class="range" id="range-filter" role="group" aria-label="时间范围">
+            <button type="button" class="range-btn on" data-range="24h">24h</button>
+            <button type="button" class="range-btn" data-range="7d">7d</button>
+          </div>
           <label class="search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
             <input id="search" type="search" placeholder="搜索关键词、来源、标签…" autocomplete="off" />
@@ -86,6 +101,6 @@
       <section class="list" id="cards" aria-label="资讯列表"></section>
     </div>
 
-    <script type="module" src="app.js?v=editorial-light-4"></script>
+    <script type="module" src="app.js?v=editorial-light-5"></script>
   </body>
 </html>
