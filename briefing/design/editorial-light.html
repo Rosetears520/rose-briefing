@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rose Briefing · Editorial Light</title>
+<style>
+  :root{
+    --bg:#FCFCFD;
+    --panel:#FFFFFF;
+    --text:#111318;
+    --muted:#71717A;
+    --faint:#A1A1AA;
+    --line:#ECECEF;
+    --line-soft:#F3F3F5;
+    --ink:#111318;
+    --accent:#4F46E5;
+    --accent-soft:#EEF0FF;
+    --fam-BestBlogs:#B45309;
+    --fam-Official:#2563EB;
+    --fam-X:#7C3AED;
+    --fam-ai:#0D9488;
+    --serif:Georgia,"Source Serif Pro","Noto Serif SC",serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:0 28px}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:22px 0;border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em}
+  .brand .dot{width:10px;height:10px;border-radius:3px;background:var(--accent)}
+  .brand .sub{color:var(--faint);font-weight:500;font-size:.85rem}
+  .topbar nav{display:flex;gap:22px;color:var(--muted);font-size:.9rem}
+  .topbar nav a{color:var(--muted);text-decoration:none}
+
+  .masthead{padding:56px 0 36px;border-bottom:1px solid var(--line)}
+  .kicker{margin:0 0 14px;color:var(--accent);font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:.76rem}
+  .masthead h1{margin:0;font-family:var(--serif);font-weight:700;font-size:clamp(2.6rem,6vw,4.4rem);line-height:1.02;letter-spacing:-.02em}
+  .masthead .lead{margin:20px 0 0;max-width:56ch;color:var(--muted);font-size:1.05rem;line-height:1.75;font-family:var(--serif)}
+  .masthead .byline{margin-top:22px;display:flex;gap:18px;color:var(--faint);font-size:.84rem}
+  .masthead .byline b{color:var(--ink);font-weight:600}
+
+  .bar{position:sticky;top:0;z-index:20;margin:0 -28px;padding:16px 28px;background:rgba(252,252,253,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .bar .row{display:flex;gap:12px;align-items:center}
+  .search{flex:1;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:9px 18px;background:#fff}
+  .search svg{color:var(--faint)}
+  .search input{border:0;background:transparent;font:inherit;width:100%;outline:none;color:var(--text)}
+  .chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;padding:6px 14px;font-size:.82rem;cursor:pointer;font:inherit;transition:.15s}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  .status{margin:22px 0 6px;color:var(--faint);font-size:.84rem}
+
+  .list{padding:0 0 80px}
+  .item{display:grid;grid-template-columns:16px 1fr auto;gap:20px;padding:26px 0;border-bottom:1px solid var(--line-soft);transition:background .15s}
+  .item:hover{background:linear-gradient(90deg,var(--accent-soft),transparent 60%)}
+  .item .gd{width:8px;height:8px;border-radius:50%;margin-top:10px;background:var(--accent)}
+  .item .body{min-width:0}
+  .item .meta{display:flex;gap:10px;align-items:center;color:var(--faint);font-size:.8rem;margin-bottom:8px}
+  .item .fam{font-weight:700}
+  .item h2{margin:0 0 8px;font-family:var(--serif);font-weight:700;font-size:1.5rem;line-height:1.3;letter-spacing:-.01em}
+  .item:hover h2{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:5px;text-decoration-thickness:2px}
+  .item p{margin:0 0 12px;color:var(--muted);line-height:1.7;font-size:.96rem;max-width:70ch}
+  .item .tags{display:flex;gap:8px;flex-wrap:wrap}
+  .item .tag{color:var(--muted);font-size:.78rem}
+  .item .tag::before{content:"#"}
+  .item .side{text-align:right;color:var(--faint);font-size:.78rem;white-space:nowrap}
+  .item .side .score{display:inline-block;margin-top:8px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--fam-ai);font-weight:700}
+
+  @media(max-width:720px){
+    .item{grid-template-columns:8px 1fr;gap:14px}
+    .item .side{grid-column:2;text-align:left}
+    .item h2{font-size:1.28rem}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand"><span class="dot"></span>Rose Briefing <span class="sub">/ AI 资讯</span></div>
+      <nav><a href="#">最新</a><a href="#">官方</a><a href="#">关于</a></nav>
+    </div>
+
+    <section class="masthead">
+      <p class="kicker">Vol. 025 · 2026.06.25</p>
+      <h1>每一天的 AI,<br/>值得一读的部分。</h1>
+      <p class="lead">从官方公告、高质量专栏到全网热点与 X 上的声音——Rose Briefing 把它们收拢成一份可搜索的简报，安静地等你来读。</p>
+      <div class="byline"><span><b>6386</b> 条资讯</span><span>覆盖 <b>441</b> 个来源</span><span>北京时间 <b>06/25 11:42</b> 更新</span></div>
+    </section>
+
+    <div class="bar">
+      <div class="row">
+        <label class="search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="q" type="search" placeholder="搜索关键词、来源、标签…" />
+        </label>
+      </div>
+      <div class="chips" id="chips">
+        <button class="chip on" data-src="全部">全部</button>
+        <button class="chip" data-src="Official">官方</button>
+        <button class="chip" data-src="BestBlogs">BestBlogs</button>
+        <button class="chip" data-src="X/Twitter">X/Twitter</button>
+        <button class="chip" data-src="ai-news">ai-news</button>
+      </div>
+    </div>
+
+    <p class="status" id="status"></p>
+    <section class="list" id="list"></section>
+  </div>
+
+<script>
+const COL={BestBlogs:"var(--fam-BestBlogs)",Official:"var(--fam-Official)","X/Twitter":"var(--fam-X)",ai:"var(--fam-ai)"};
+const items=[
+ {fam:"Official",site:"OpenAI",src:"OpenAI(@OpenAI)",t:"Introducing GPT-5.5 Instant",s:"新版推理与个性化显著提升，向全部用户逐步开放。",time:"06/25 02:00",tags:["GPT-5.5","模型升级"]},
+ {fam:"Official",site:"Anthropic",src:"Claude(@claudeai)",t:"Claude 推出「智能体身份」访问模型",s:"为 Agent 提供可验证身份，安全地代表用户访问模型与外部系统。",time:"06/25 09:18",tags:["Claude","Agent"]},
+ {fam:"X/Twitter",site:"中文Twitter博主",src:"宝玉(@dotey)",t:"Anthropic 致信参议院,指控 Alibaba 最大规模蒸馏攻击",s:"约 2.5 万虚假账号、2880 万次交互,直指 Claude 工程与推理能力。",time:"06/25 11:51",tags:["Anthropic","Qwen","蒸馏"]},
+ {fam:"BestBlogs",site:"BestBlogs",src:"量子位",t:"豆包收费版第一天:充值,又得充值?",s:"实测三档,办公模式与 Office 友好,但复杂任务额度消耗很快。",time:"06/25 08:32",tags:["豆包","付费版"],score:85},
+ {fam:"ai",site:"新智元",src:"新智元",t:"Claude 惊人真相:思考过程加密,给钱也看不到",s:"推理链被加密处理,即便付费也无法窥探其内部思考过程。",time:"06/25 16:02",tags:["Claude","可解释性"]},
+ {fam:"Official",site:"DeepSeek",src:"DeepSeek(@deepseek_ai)",t:"DeepSeek V4 Flash 发布",s:"保持低成本的同时大幅提升工具调用与代码能力。",time:"06/24 22:10",tags:["DeepSeek","V4"]},
+ {fam:"X/Twitter",site:"中文Twitter博主",src:"小互(@imxiaohu)",t:"百度开源新 OCR:一次吃下一本书",s:"OmniDocBench v1.5 准确率 93%,较 DeepSeek-OCR 基线高 6 点。",time:"06/24 20:05",tags:["OCR","开源"]},
+ {fam:"BestBlogs",site:"BestBlogs",src:"量子位",t:"世界模型混战,Momenta 率先冲刺 IPO",s:"R7 三层架构 + 超 120 亿公里数据,许可收入三年增长 42 倍。",time:"06/25 07:20",tags:["Momenta","世界模型"],score:85},
+ {fam:"ai",site:"TechURLs",src:"The Next Web",t:"Anthropic 指责 Alibaba 史上最大规模蒸馏",s:"25,000 虚假账号、2880 万次交互,目标直指工程与推理能力。",time:"06/25 05:40",tags:["Anthropic","Alibaba"]},
+];
+const $=id=>document.getElementById(id);
+function label(f){return f==="X/Twitter"?"X/Twitter":f==="ai"?"ai-news":f}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function row(it){
+  const e=document.createElement("article");e.className="item";
+  e.innerHTML=`<div class="gd" style="background:${COL[it.fam]}"></div>
+  <div class="body">
+    <div class="meta"><span class="fam" style="color:${COL[it.fam]}">${esc(label(it.fam))}</span><span>${esc([it.site,it.src].join(" · "))}</span></div>
+    <h2>${esc(it.t)}</h2>
+    <p>${esc(it.s)}</p>
+    <div class="tags">${it.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join("")}</div>
+  </div>
+  <div class="side">${esc(it.time)}${it.score?`<br/><span class="score">${it.score}</span>`:""}</div>`;
+  return e;
+}
+let q="",src="全部";
+function render(){
+  const f=items.filter(it=>src==="全部"||label(it.fam)===src).filter(it=>!q||[it.t,it.s,it.site,it.src,...it.tags].join(" ").toLowerCase().includes(q));
+  $("list").replaceChildren(...f.map(row));
+  $("status").textContent=f.length?`显示 ${f.length} / ${items.length} 条`:"没有匹配结果";
+}
+$("q").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render()});
+document.querySelectorAll("#chips .chip").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll("#chips .chip").forEach(x=>x.classList.remove("on"));c.classList.add("on");src=c.dataset.src;render()}));
+render();
+</script>
+</body>
+</html>

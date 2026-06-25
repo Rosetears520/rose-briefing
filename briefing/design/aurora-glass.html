@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rose Briefing · Aurora Glass</title>
+<style>
+  :root{
+    --bg:#F7F8FA;
+    --text:#0B0C0F;
+    --muted:#6B7280;
+    --line:rgba(15,23,42,0.06);
+    --accent-a:#7C5CFF;
+    --accent-b:#5B8DEF;
+    --mint:#34D399;
+    --glass:rgba(255,255,255,0.65);
+    --glass-strong:rgba(255,255,255,0.78);
+    --shadow:0 18px 50px rgba(30,27,75,0.10);
+    --shadow-soft:0 8px 24px rgba(30,27,75,0.06);
+    --radius:22px;
+    --fam-BestBlogs:#D97706;
+    --fam-Official:#2563EB;
+    --fam-X:#7C3AED;
+    --fam-ai:#0D9488;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  /* aurora mesh */
+  .aurora{position:fixed;inset:0;z-index:0;filter:blur(70px);opacity:.55;pointer-events:none}
+  .aurora span{position:absolute;border-radius:50%;mix-blend-mode:multiply;animation:float 22s ease-in-out infinite}
+  .aurora .a{width:46vw;height:46vw;left:-8vw;top:-10vw;background:radial-gradient(circle,#C4B5FD,transparent 70%)}
+  .aurora .b{width:42vw;height:42vw;right:-10vw;top:4vw;background:radial-gradient(circle,#93C5FD,transparent 70%);animation-delay:-7s}
+  .aurora .c{width:38vw;height:38vw;left:30vw;bottom:-14vw;background:radial-gradient(circle,#A7F3D0,transparent 70%);animation-delay:-14s}
+  @keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(4vw,3vw) scale(1.08)}66%{transform:translate(-3vw,-2vw) scale(.95)}}
+  /* grain */
+  body::before{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .wrap{position:relative;z-index:2;max-width:1140px;margin:0 auto;padding:0 20px}
+
+  .hero{display:flex;gap:28px;align-items:flex-end;padding:64px 0 30px}
+  .hero .eyebrow{margin:0 0 12px;font-size:.8rem;font-weight:800;letter-spacing:.22em;text-transform:uppercase;background:linear-gradient(90deg,var(--accent-a),var(--accent-b));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero h1{margin:0;font-size:clamp(2.4rem,6vw,4.6rem);line-height:.96;letter-spacing:-.045em;font-weight:800}
+  .hero .sub{margin:18px 0 0;color:var(--muted);font-size:1.04rem;line-height:1.7;max-width:40ch}
+  .stat{margin-left:auto;min-width:170px;padding:24px;border-radius:var(--radius);background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);box-shadow:var(--shadow);text-align:center}
+  .stat b{display:block;font-size:2.6rem;font-weight:800;line-height:1;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat small{display:block;margin-top:8px;color:var(--muted)}
+  .stat .gen{margin-top:4px;color:#9CA3AF;font-size:.78rem}
+
+  .bar{position:sticky;top:14px;z-index:30;display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:12px;border-radius:20px;background:var(--glass-strong);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);box-shadow:var(--shadow)}
+  .bar .search{position:relative}
+  .bar .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9CA3AF}
+  .bar input,.bar select{height:46px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.7);color:var(--text);font:inherit;padding:0 14px}
+  .bar input{width:100%;padding-left:42px;transition:.18s}
+  .bar input:focus{outline:none;border-color:var(--accent-a);box-shadow:0 0 0 4px rgba(124,92,255,.16)}
+
+  .status{margin:18px 2px;color:var(--muted);font-size:.92rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;padding-bottom:80px}
+
+  .card{position:relative;display:flex;flex-direction:column;padding:22px;border-radius:20px;background:var(--glass-strong);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);box-shadow:var(--shadow-soft);overflow:hidden;transition:transform .22s ease,box-shadow .22s ease}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent-a),var(--accent-b));transform:scaleY(0);transform-origin:top;transition:transform .25s ease}
+  .card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+  .card:hover::before{transform:scaleY(1)}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--muted);font-size:.8rem}
+  .fam{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:#fff;border-radius:999px;padding:3px 10px;font-size:.72rem}
+  .fam i{width:7px;height:7px;border-radius:50%;background:#fff;opacity:.9}
+  .f-BestBlogs{background:var(--fam-BestBlogs)}
+  .f-Official{background:var(--fam-Official)}
+  .f-X{background:var(--fam-X)}
+  .f-ai{background:var(--fam-ai)}
+  .card h3{margin:14px 0 8px;font-size:1.06rem;line-height:1.5;font-weight:600}
+  .card p{margin:0;color:var(--muted);line-height:1.65;font-size:.9rem}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}
+  .tag{background:rgba(124,92,255,.1);color:var(--accent-a);border-radius:999px;padding:3px 9px;font-size:.74rem;font-weight:600}
+  .score{background:rgba(13,148,136,.12);color:var(--fam-ai)}
+  .read{margin-top:auto;display:inline-flex;align-items:center;gap:6px;color:var(--accent-b);font-weight:700;text-decoration:none;font-size:.9rem;opacity:0;transform:translateX(-6px);transition:.2s}
+  .card:hover .read{opacity:1;transform:none}
+  .read .arr{transition:transform .2s}
+  .card:hover .read .arr{transform:translateX(3px)}
+
+  @media(max-width:760px){
+    .hero{flex-direction:column;align-items:flex-start}
+    .stat{margin-left:0;width:100%}
+    .bar{grid-template-columns:1fr;position:static}
+  }
+</style>
+</head>
+<body>
+  <div class="aurora"><span class="a"></span><span class="b"></span><span class="c"></span></div>
+
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Rose Briefing</p>
+        <h1>AI 资讯<br/>静态搜索站</h1>
+        <p class="sub">聚合官方、BestBlogs、X/Twitter 与全网热点，部署在 GitHub Pages，自己搜索自己看。</p>
+      </div>
+      <div class="stat">
+        <b id="count">0</b>
+        <small>条资讯</small>
+        <div class="gen">北京时间 06/25 11:42 更新</div>
+      </div>
+    </header>
+
+    <div class="bar">
+      <label class="search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="q" type="search" placeholder="关键词、来源、标签…" />
+      </label>
+      <select id="src"><option>全部来源</option><option>BestBlogs</option><option>Official</option><option>X/Twitter</option><option>ai-news-aggregator</option></select>
+      <select><option>最新优先</option><option>分数优先</option><option>来源</option></select>
+    </div>
+
+    <p class="status" id="status"></p>
+    <section class="grid" id="grid"></section>
+  </div>
+
+<script>
+const FAM={BestBlogs:"BestBlogs",Official:"Official","X/Twitter":"X",ai:"ai"};
+const items=[
+ {fam:"Official",site:"OpenAI",src:"OpenAI(@OpenAI)",t:"Introducing GPT-5.5 Instant:更会读心、购物推荐更懂你",s:"新版 GPT-5.5 Instant 推理与个性化能力显著提升，向全部用户逐步开放。",time:"北京时间 06/25 02:00",tags:["GPT-5.5","模型升级"]},
+ {fam:"Official",site:"Anthropic",src:"Claude(@claudeai)",t:"Claude 推出「智能体身份」访问模型",s:"为 Agent 提供可验证身份，便于安全地代表用户访问模型与外部系统。",time:"北京时间 06/25 09:18",tags:["Claude","Agent"]},
+ {fam:"X",site:"中文Twitter博主",src:"宝玉(@dotey)",t:"Anthropic 致信参议院指控 Alibaba 对 Claude 发起最大规模蒸馏攻击",s:"通义千问关联方在 1.5 个月内通过约 2.5 万个虚假账号进行 2880 万次交互，攻击量接近此前三家总和的两倍。",time:"北京时间 06/25 11:51",tags:["Anthropic","Qwen","蒸馏"]},
+ {fam:"BestBlogs",site:"BestBlogs",src:"量子位",t:"豆包收费版第一天，我：充值…又得充值？",s:"实测豆包专业版三档，办公任务模式与 Office 套件友好，但复杂任务额度消耗很快。",time:"北京时间 06/25 08:32",tags:["豆包","付费版"],score:85},
+ {fam:"ai",site:"新智元",src:"新智元",t:"Claude 惊人真相被教授曝光：思考过程加密，给钱也看不到！",s:"研究显示 Claude 的推理链被加密处理，即便付费也无法窥探其内部思考过程。",time:"北京时间 06/25 16:02",tags:["Claude","可解释性"]},
+ {fam:"Official",site:"DeepSeek",src:"DeepSeek(@deepseek_ai)",t:"DeepSeek V4 Flash 发布：95% 任务都能完成",s:"新模型在保持低成本的同时大幅提升工具调用与代码能力。",time:"北京时间 06/24 22:10",tags:["DeepSeek","V4"]},
+ {fam:"X",site:"中文Twitter博主",src:"小互(@imxiaohu)",t:"百度开源新 OCR：一次吃下一本书，疑似前 DeepSeek 研究员作品",s:"OmniDocBench v1.5 准确率 93%，较原始 DeepSeek-OCR 基线高 6 个点。",time:"北京时间 06/24 20:05",tags:["OCR","开源"]},
+ {fam:"BestBlogs",site:"BestBlogs",src:"量子位",t:"世界模型混战，Momenta 率先冲刺 IPO",s:"R7 世界模型三层架构 + 超 120 亿公里数据，许可收入三年增长 42 倍。",time:"北京时间 06/25 07:20",tags:["Momenta","世界模型"],score:85},
+ {fam:"ai",site:"TechURLs",src:"The Next Web",t:"Anthropic 指责 Alibaba 发起史上最大规模蒸馏活动",s:"25,000 个虚假账号、2880 万次交互，目标直指 Claude 的工程与推理能力。",time:"北京时间 06/25 05:40",tags:["Anthropic","Alibaba"]},
+];
+const $=id=>document.getElementById(id);
+function cls(f){return "f-"+f}
+function card(it){
+  const e=document.createElement("article");e.className="card";e.dataset.fam=it.fam;
+  e.innerHTML=`<div class="meta">
+    <span class="fam ${cls(it.fam)}"><i></i>${label(it.fam)}</span>
+    <span>${esc([it.site,it.src].filter(Boolean).join(" · "))}</span>
+    <span>${esc(it.time)}</span>
+    ${it.score?`<span class="tag score">分数 ${it.score}</span>`:""}
+  </div>
+  <h3>${esc(it.t)}</h3>
+  <p>${esc(it.s)}</p>
+  <div class="tags">${it.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join("")}</div>
+  <a class="read" href="#">打开原文 <span class="arr">→</span></a>`;
+  return e;
+}
+function label(f){return f==="X"?"X/Twitter:f==="ai"?"ai-news":f}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+let q="",src="全部来源";
+function render(){
+  const f=items.filter(it=>(src==="全部来源"||label(it.fam)===src)).filter(it=>!q||[it.t,it.s,it.site,it.src,...it.tags].join(" ").toLowerCase().includes(q));
+  $("grid").replaceChildren(...f.map(card));
+  $("status").textContent=f.length?`显示 ${f.length} / ${items.length} 条`:"没有匹配结果";
+}
+$("q").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render()});
+$("src").addEventListener("change",e=>{src=e.target.value;render()});
+// count up
+const target=items.length;let n=0;
+const t=setInterval(()=>{n+=Math.ceil((target-n)/5);if(n>=target){n=target;clearInterval(t)}$("count").textContent=n},40);
+render();
+</script>
+</body>
+</html>
