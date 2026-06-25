@@ -16,6 +16,7 @@ const MIN_OFFICIAL_RSS_FEEDS = 3;
 const MIN_OFFICIAL_RSS_ITEMS = 20;
 const MIN_OFFICIAL_X_ITEMS = 50;
 const MAX_FETCH_BYTES = 8_000_000;
+const MAX_AI_NEWS_FUTURE_SKEW_MS = 60 * 60 * 1000;
 const MIN_ITEMS_BY_FAMILY = {
   BestBlogs: 1,
   "ai-news-aggregator": 1000,
@@ -422,8 +423,21 @@ async function mapWithConcurrency(values, concurrency, mapper) {
 }
 
 function normalizeAiNewsDate(item) {
-  if (item.published_at) return parseBeijingWallTime(item.published_at);
-  return item.first_seen_at || item.last_seen_at;
+  const publishedAt = parseBeijingWallTime(item.published_at);
+  const firstSeenAt = parseDate(item.first_seen_at);
+  const lastSeenAt = parseDate(item.last_seen_at);
+
+  if (publishedAt) {
+    const publishedMs = dateValue(publishedAt);
+    const publishedAfterRun = publishedMs > Date.now() + MAX_AI_NEWS_FUTURE_SKEW_MS;
+    const publishedAfterFirstSeen = firstSeenAt && publishedMs > dateValue(firstSeenAt) + MAX_AI_NEWS_FUTURE_SKEW_MS;
+    const publishedAfterLastSeen = lastSeenAt && publishedMs > dateValue(lastSeenAt) + MAX_AI_NEWS_FUTURE_SKEW_MS;
+    if (!publishedAfterRun && !publishedAfterFirstSeen && !publishedAfterLastSeen) {
+      return publishedAt;
+    }
+  }
+
+  return firstSeenAt || lastSeenAt || publishedAt;
 }
 
 function normalizeItem(input) {
