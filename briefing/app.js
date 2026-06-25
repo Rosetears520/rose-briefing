@@ -34,8 +34,7 @@ const elements = {
   platformFilter: document.querySelector("#platform-filter"),
   sortOrder: document.querySelector("#sort-order"),
   status: document.querySelector("#status"),
-  list: document.querySelector("#cards"),
-  template: document.querySelector("#card-template")
+  list: document.querySelector("#cards")
 };
 
 init().catch((error) => {
@@ -157,14 +156,33 @@ function statusText(filteredCount, visibleCount, warningText) {
 }
 
 function renderItem(item) {
-  const fragment = elements.template.content.cloneNode(true);
-  const article = fragment.querySelector(".item");
-  const gd = fragment.querySelector(".gd");
-  const meta = fragment.querySelector(".meta");
-  const titleLink = fragment.querySelector(".title-link");
-  const summary = fragment.querySelector(".summary");
-  const tags = fragment.querySelector(".tags");
-  const side = fragment.querySelector(".side");
+  const article = document.createElement("article");
+  article.className = "item";
+
+  const gd = document.createElement("span");
+  gd.className = "gd";
+
+  const body = document.createElement("div");
+  body.className = "body";
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+
+  const heading = document.createElement("h2");
+  const titleLink = document.createElement("a");
+  titleLink.className = "title-link";
+  titleLink.target = "_blank";
+  titleLink.rel = "noopener noreferrer";
+  heading.append(titleLink);
+
+  const summary = document.createElement("p");
+  summary.className = "summary";
+
+  const tags = document.createElement("div");
+  tags.className = "tags";
+
+  const side = document.createElement("div");
+  side.className = "side";
 
   const color = FAM_COLOR[item.sourceFamily] || FAM_COLOR.Unknown;
   gd.style.background = color;
@@ -196,7 +214,9 @@ function renderItem(item) {
   }
 
   article.dataset.source = item.sourceFamily;
-  return fragment;
+  body.append(meta, heading, summary, tags);
+  article.append(gd, body, side);
+  return article;
 }
 
 function textNode(text) {
