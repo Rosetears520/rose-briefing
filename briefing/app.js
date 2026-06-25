@@ -4,6 +4,7 @@ const state = {
   query: "",
   family: "all",
   channel: "all",
+  site: "all",
   publisher: "all",
   topic: "all",
   sort: "newest",
@@ -31,11 +32,9 @@ const FAMILY_LABEL = {
 const FAMILY_ORDER = ["curated", "official", "community", "aggregator"];
 
 const CHANNEL_LABEL = {
-  "curated-rss": "精选 RSS",
-  "official-rss": "官方 RSS",
-  "official-social": "官方社媒",
-  "community-social": "社区社媒",
-  "aggregator-json": "聚合 JSON"
+  x: "x",
+  blogs: "blogs",
+  aggregator: "aggregator"
 };
 
 const elements = {
@@ -46,6 +45,7 @@ const elements = {
   search: document.querySelector("#search"),
   familyFilter: document.querySelector("#family-filter"),
   channelFilter: document.querySelector("#channel-filter"),
+  siteFilter: document.querySelector("#site-filter"),
   publisherFilter: document.querySelector("#publisher-filter"),
   topicFilter: document.querySelector("#topic-filter"),
   sortOrder: document.querySelector("#sort-order"),
@@ -97,6 +97,11 @@ function bindControls() {
 
   elements.channelFilter.addEventListener("change", () => {
     state.channel = elements.channelFilter.value;
+    render();
+  });
+
+  elements.siteFilter.addEventListener("change", () => {
+    state.site = elements.siteFilter.value;
     render();
   });
 
@@ -184,9 +189,12 @@ function render() {
   syncChannelOptions(familyItems);
 
   const familyChannelItems = familyItems.filter(matchesChannel);
-  syncPublisherOptions(familyChannelItems);
+  syncSiteOptions(familyChannelItems);
 
-  const taxonomyItems = familyChannelItems.filter(matchesPublisher);
+  const familyChannelSiteItems = familyChannelItems.filter(matchesSite);
+  syncPublisherOptions(familyChannelSiteItems);
+
+  const taxonomyItems = familyChannelSiteItems.filter(matchesPublisher);
   syncTopicOptions(taxonomyItems);
 
   updateHeader(base);
@@ -237,6 +245,14 @@ function syncChannelOptions(baseItems) {
   });
 }
 
+function syncSiteOptions(baseItems) {
+  const counts = countBy(baseItems, (item) => item.site);
+  const options = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN"));
+  syncSelectOptions(elements.siteFilter, "all", "全部站点", options, state.site, (value) => `${value} (${counts.get(value)})`, (value) => {
+    state.site = value;
+  });
+}
+
 function syncPublisherOptions(baseItems) {
   const counts = countBy(baseItems, (item) => item.publisher);
   const options = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN"));
@@ -279,28 +295,28 @@ function syncSelectOptions(element, allValue, allLabel, entries, currentValue, o
 }
 
 function updateHeader(baseItems) {
+  const siteCount = uniqueCount(baseItems.map((item) => item.site));
   const publisherCount = uniqueCount(baseItems.map((item) => item.publisher));
-  const collectionCount = uniqueCount(baseItems.map((item) => item.collection));
   const channelCount = uniqueCount(baseItems.map((item) => item.channel));
   elements.count.textContent = String(baseItems.length);
-  elements.coverageLine.innerHTML = `覆盖 <b>${publisherCount}</b> 个发布方、<b>${collectionCount}</b> 个集合、<b>${channelCount}</b> 个渠道`;
+  elements.coverageLine.innerHTML = `覆盖 <b>${siteCount}</b> 个站点、<b>${publisherCount}</b> 个发布方、<b>${channelCount}</b> 个渠道`;
 }
 
 function updateCoverageDetail(baseItems) {
   const rows = [...groupCoverage(baseItems).entries()].sort((a, b) => b[1].itemCount - a[1].itemCount || a[0].localeCompare(b[0], "zh-CN"));
   elements.detailTitle.textContent = `${state.range} 覆盖详情`;
-  elements.detailList.replaceChildren(...rows.map(([publisher, info]) => {
+  elements.detailList.replaceChildren(...rows.map(([site, info]) => {
     const item = document.createElement("div");
     item.className = "coverage-detail-item";
     const strong = document.createElement("strong");
-    strong.textContent = publisher;
+    strong.textContent = site;
     const meta = document.createElement("span");
-    meta.textContent = `${info.itemCount} 条资讯 · ${info.collectionCount} 个集合 · ${info.channelCount} 个渠道`;
+    meta.textContent = `${info.itemCount} 条资讯 · ${info.publisherCount} 个发布方 · ${info.channelCount} 个渠道`;
     const detail = document.createElement("small");
     detail.textContent = [
       info.familyLabels.join(" / "),
       info.channelLabels.join(" / "),
-      info.collectionPreview
+      info.publisherPreview
     ].filter(Boolean).join(" · ");
     item.append(strong, meta);
     if (detail.textContent) item.append(detail);
@@ -311,32 +327,32 @@ function updateCoverageDetail(baseItems) {
 function groupCoverage(items) {
   const map = new Map();
   for (const item of items) {
-    const key = item.publisher || "未知发布方";
-    const current = map.get(key) || { itemCount: 0, families: new Set(), channels: new Set(), collections: new Set() };
+    const key = item.site || "未知站点";
+    const current = map.get(key) || { itemCount: 0, families: new Set(), channels: new Set(), publishers: new Set() };
     current.itemCount += 1;
     if (item.family) current.families.add(item.family);
     if (item.channel) current.channels.add(item.channel);
-    if (item.collection) current.collections.add(item.collection);
+    if (item.publisher) current.publishers.add(item.publisher);
     map.set(key, current);
   }
   for (const value of map.values()) {
-    value.collectionCount = value.collections.size;
+    value.publisherCount = value.publishers.size;
     value.channelCount = value.channels.size;
     value.familyLabels = [...value.families].sort(compareTaxonomyValues(labelFamily));
     value.channelLabels = [...value.channels].sort(compareTaxonomyValues(labelChannel));
-    value.collectionPreview = [...value.collections].sort((a, b) => a.localeCompare(b, "zh-CN")).slice(0, 3).join(" · ");
+    value.publisherPreview = [...value.publishers].sort((a, b) => a.localeCompare(b, "zh-CN")).slice(0, 3).join(" · ");
   }
   return map;
 }
 
 function statusText(filteredCount, visibleCount, baseCount, warningText) {
   const rangeItems = getRangeItems();
+  const siteCount = uniqueCount(rangeItems.map((item) => item.site));
   const publisherCount = uniqueCount(rangeItems.map((item) => item.publisher));
-  const collectionCount = uniqueCount(rangeItems.map((item) => item.collection));
   const prefix = visibleCount < filteredCount
     ? `显示前 ${visibleCount} 条，匹配 ${filteredCount} / ${baseCount} 条`
     : `显示 ${filteredCount} / ${baseCount} 条`;
-  return `${prefix}；覆盖 ${publisherCount} 个发布方、${collectionCount} 个集合${warningText}`;
+  return `${prefix}；覆盖 ${siteCount} 个站点、${publisherCount} 个发布方${warningText}`;
 }
 
 function renderItem(item) {
@@ -354,6 +370,13 @@ function renderItem(item) {
   famTag.textContent = labelFamily(item.family);
   meta.append(famTag);
 
+  if (item.site) {
+    const siteTag = document.createElement("span");
+    siteTag.className = "meta-tag meta-tag-site";
+    siteTag.textContent = item.site;
+    meta.append(siteTag);
+  }
+
   if (item.channel) {
     const channelTag = document.createElement("span");
     channelTag.className = "meta-tag";
@@ -370,7 +393,7 @@ function renderItem(item) {
 
   const sourceText = document.createElement("span");
   sourceText.className = "meta-text";
-  sourceText.textContent = [item.publisher, item.collection].filter(Boolean).join(" · ") || "未知发布方";
+  sourceText.textContent = item.publisher || "未知发布方";
   meta.append(sourceText);
 
   if (item.language) {
@@ -427,6 +450,10 @@ function matchesChannel(item) {
   return state.channel === "all" || item.channel === state.channel;
 }
 
+function matchesSite(item) {
+  return state.site === "all" || item.site === state.site;
+}
+
 function matchesPublisher(item) {
   return state.publisher === "all" || item.publisher === state.publisher;
 }
@@ -442,8 +469,8 @@ function matchesQuery(item) {
     item.summary,
     item.family,
     item.channel,
+    item.site,
     item.publisher,
-    item.collection,
     item.originType,
     item.language,
     ...(item.topic || [])
@@ -453,7 +480,7 @@ function matchesQuery(item) {
 
 function compareItems(a, b) {
   if (state.sort === "score") return (b.score ?? -1) - (a.score ?? -1) || newest(a, b);
-  if (state.sort === "publisher") return `${labelFamily(a.family)}${a.publisher}${labelChannel(a.channel)}`.localeCompare(`${labelFamily(b.family)}${b.publisher}${labelChannel(b.channel)}`, "zh-CN") || newest(a, b);
+  if (state.sort === "publisher") return `${labelFamily(a.family)}${a.site}${a.publisher}${labelChannel(a.channel)}`.localeCompare(`${labelFamily(b.family)}${b.site}${b.publisher}${labelChannel(b.channel)}`, "zh-CN") || newest(a, b);
   return newest(a, b);
 }
 
@@ -478,13 +505,47 @@ function normalizeItem(input) {
     summary: cleanText(input.summary),
     score: Number.isFinite(input.score) ? input.score : null,
     family: cleanText(input.family) || "unknown",
-    channel: cleanText(input.channel) || "unknown",
+    channel: normalizeChannel(input.channel),
+    site: normalizeSite(input),
     publisher: cleanText(input.publisher) || "未知发布方",
-    collection: cleanText(input.collection),
     topic: uniqueTexts(input.topic),
     language: typeof input.language === "string" && input.language.trim() ? input.language.trim() : null,
     originType: cleanText(input.originType)
   };
+}
+
+function normalizeChannel(value) {
+  const channel = cleanText(value).toLowerCase();
+  if (!channel) return "unknown";
+  if (channel === "x" || channel === "blogs" || channel === "aggregator") return channel;
+  if (channel === "curated-rss" || channel === "official-rss") return "blogs";
+  if (channel === "official-social" || channel === "community-social") return "x";
+  if (channel === "aggregator-json") return "aggregator";
+  return channel;
+}
+
+function normalizeSite(input) {
+  const site = cleanText(input.site);
+  if (site) return site;
+
+  const collection = cleanText(input.collection);
+  if (collection.includes("BestBlogs")) return "BestBlogs";
+  if (normalizeChannel(input.channel) === "x") return "X";
+  if (collection) return collection;
+
+  return siteFromUrl(input.url) || "未知站点";
+}
+
+function siteFromUrl(value) {
+  const url = cleanText(value);
+  if (!url) return "";
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (host === "x.com" || host === "twitter.com") return "X";
+    return host;
+  } catch {
+    return "";
+  }
 }
 
 function cleanText(value) {
@@ -517,6 +578,7 @@ function compareTaxonomyValues(label) {
 function resetTaxonomyFilters() {
   state.family = "all";
   state.channel = "all";
+  state.site = "all";
   state.publisher = "all";
   state.topic = "all";
 }

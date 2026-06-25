@@ -24,17 +24,17 @@ const MIN_ITEMS_BY_FAMILY = {
   official: 50
 };
 const ALLOWED_CHANNELS_BY_FAMILY = new Map([
-  ["curated", new Set(["curated-rss"])],
-  ["aggregator", new Set(["aggregator-json"])],
-  ["community", new Set(["community-social"])],
-  ["official", new Set(["official-rss", "official-social"])]
+  ["curated", new Set(["blogs"])],
+  ["aggregator", new Set(["aggregator"])],
+  ["community", new Set(["x"])],
+  ["official", new Set(["blogs", "x"])]
 ]);
 
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
 const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
 const SUYXH_OPML_FEEDS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json";
-const BESTBLOGS_COLLECTION = "BestBlogs AI RSS";
-const AI_NEWS_COLLECTION_FALLBACK = "ai-news-aggregator latest-7d";
+const BESTBLOGS_SITE = "BestBlogs";
+const AI_NEWS_SITE_FALLBACK = "ai-news-aggregator";
 const OFFICIAL_RSS_FEEDS = [
   { org: "OpenAI", name: "OpenAI News", url: "https://openai.com/news/rss.xml", language: "en" },
   { org: "Google AI", name: "Google AI Blog", url: "https://blog.google/innovation-and-ai/technology/ai/rss/", language: "en" },
@@ -53,9 +53,9 @@ const seedItems = [
     summary: "运行 npm run update 后会替换为实时数据。",
     score: null,
     family: "curated",
-    channel: "curated-rss",
+    channel: "blogs",
+    site: BESTBLOGS_SITE,
     publisher: "BestBlogs",
-    collection: BESTBLOGS_COLLECTION,
     topic: ["ai", "rss"],
     language: "zh",
     originType: "curated-secondary"
@@ -68,9 +68,9 @@ const seedItems = [
     summary: "运行 npm run update 后会拉取 latest-7d.json。",
     score: null,
     family: "aggregator",
-    channel: "aggregator-json",
+    channel: "aggregator",
+    site: AI_NEWS_SITE_FALLBACK,
     publisher: "SuYxh/ai-news-aggregator",
-    collection: AI_NEWS_COLLECTION_FALLBACK,
     topic: ["ai", "json"],
     language: "zh",
     originType: "aggregated-hotlist"
@@ -166,34 +166,34 @@ function assertRequiredSources(items) {
     }
   }
 
-  const officialRssCount = countOfficialChannel(items, "official-rss");
-  if (officialRssCount < MIN_OFFICIAL_RSS_ITEMS) {
-    throw new Error(`Official RSS has only ${officialRssCount} items; preserving existing data instead of publishing partial data.`);
+  const officialBlogsCount = countOfficialChannel(items, "blogs");
+  if (officialBlogsCount < MIN_OFFICIAL_RSS_ITEMS) {
+    throw new Error(`Official blogs has only ${officialBlogsCount} items; preserving existing data instead of publishing partial data.`);
   }
-  const officialRssFeeds = countOfficialRssFeeds(items);
-  if (officialRssFeeds < MIN_OFFICIAL_RSS_FEEDS) {
-    throw new Error(`Official RSS has only ${officialRssFeeds} feeds; preserving existing data instead of publishing partial data.`);
+  const officialBlogSites = countOfficialBlogSites(items);
+  if (officialBlogSites < MIN_OFFICIAL_RSS_FEEDS) {
+    throw new Error(`Official blogs has only ${officialBlogSites} sites; preserving existing data instead of publishing partial data.`);
   }
-  const officialSocialCount = countOfficialChannel(items, "official-social");
-  if (officialSocialCount < MIN_OFFICIAL_SOCIAL_ITEMS) {
-    throw new Error(`Official social has only ${officialSocialCount} items; preserving existing data instead of publishing partial data.`);
+  const officialXCount = countOfficialChannel(items, "x");
+  if (officialXCount < MIN_OFFICIAL_SOCIAL_ITEMS) {
+    throw new Error(`Official X has only ${officialXCount} items; preserving existing data instead of publishing partial data.`);
   }
 }
 
 function ensureOfficialSubsources(items, existingItems, warnings) {
-  const officialRssCount = countOfficialChannel(items, "official-rss");
-  const officialRssFeeds = countOfficialRssFeeds(items);
-  const officialSocialCount = countOfficialChannel(items, "official-social");
-  if (officialRssCount >= MIN_OFFICIAL_RSS_ITEMS && officialRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && officialSocialCount >= MIN_OFFICIAL_SOCIAL_ITEMS) {
+  const officialBlogsCount = countOfficialChannel(items, "blogs");
+  const officialBlogSites = countOfficialBlogSites(items);
+  const officialXCount = countOfficialChannel(items, "x");
+  if (officialBlogsCount >= MIN_OFFICIAL_RSS_ITEMS && officialBlogSites >= MIN_OFFICIAL_RSS_FEEDS && officialXCount >= MIN_OFFICIAL_SOCIAL_ITEMS) {
     return items;
   }
 
   const existingOfficial = existingItems.filter((item) => item.family === "official");
-  const existingRssCount = countOfficialChannel(existingOfficial, "official-rss");
-  const existingRssFeeds = countOfficialRssFeeds(existingOfficial);
-  const existingSocialCount = countOfficialChannel(existingOfficial, "official-social");
-  if (existingRssCount >= MIN_OFFICIAL_RSS_ITEMS && existingRssFeeds >= MIN_OFFICIAL_RSS_FEEDS && existingSocialCount >= MIN_OFFICIAL_SOCIAL_ITEMS) {
-    warnings.push(`Official subsource coverage low (rss ${officialRssCount}/${officialRssFeeds} feeds, social ${officialSocialCount}); reused ${existingOfficial.length} existing official items`);
+  const existingBlogsCount = countOfficialChannel(existingOfficial, "blogs");
+  const existingBlogSites = countOfficialBlogSites(existingOfficial);
+  const existingXCount = countOfficialChannel(existingOfficial, "x");
+  if (existingBlogsCount >= MIN_OFFICIAL_RSS_ITEMS && existingBlogSites >= MIN_OFFICIAL_RSS_FEEDS && existingXCount >= MIN_OFFICIAL_SOCIAL_ITEMS) {
+    warnings.push(`Official subsource coverage low (blogs ${officialBlogsCount}/${officialBlogSites} sites, x ${officialXCount}); reused ${existingOfficial.length} existing official items`);
     return [...items.filter((item) => item.family !== "official"), ...existingOfficial];
   }
 
@@ -204,10 +204,10 @@ function countOfficialChannel(items, channel) {
   return items.filter((item) => item.family === "official" && item.channel === channel).length;
 }
 
-function countOfficialRssFeeds(items) {
+function countOfficialBlogSites(items) {
   return new Set(items
-    .filter((item) => item.family === "official" && item.channel === "official-rss")
-    .map((item) => item.collection)
+    .filter((item) => item.family === "official" && item.channel === "blogs")
+    .map((item) => item.site)
     .filter(Boolean)).size;
 }
 
@@ -244,9 +244,9 @@ async function fetchBestBlogs() {
       summary: descriptionText,
       score: Number.isFinite(Number(scoreText)) ? Number(scoreText) : null,
       family: "curated",
-      channel: "curated-rss",
+      channel: "blogs",
+      site: BESTBLOGS_SITE,
       publisher: extractBestBlogsSource(descriptionText) || author || "BestBlogs",
-      collection: BESTBLOGS_COLLECTION,
       topic: [...new Set([category, ...keywords].filter(Boolean))],
       language: extractBestBlogsLanguage(descriptionText) || detectLanguage([title, descriptionText]),
       originType: "curated-secondary"
@@ -267,9 +267,9 @@ async function fetchAiNewsAggregator() {
     summary: item.title_original && item.title_original !== item.title ? item.title_original : "",
     score: null,
     family: "aggregator",
-    channel: "aggregator-json",
-    publisher: item.source || item.site_name || "ai-news-aggregator",
-    collection: item.site_name || item.site_id || AI_NEWS_COLLECTION_FALLBACK,
+    channel: "aggregator",
+    site: item.site_name || item.site_id || item.source || AI_NEWS_SITE_FALLBACK,
+    publisher: item.source || item.publication || item.site_name || item.site_id || AI_NEWS_SITE_FALLBACK,
     topic: [],
     language: detectLanguage([item.title_original, item.title_zh, item.title_en, item.title]),
     originType: "aggregated-hotlist"
@@ -286,9 +286,9 @@ async function fetchOfficialRssFeeds() {
   const feedResults = await mapWithConcurrency(OFFICIAL_RSS_FEEDS, 4, async (feed) => {
     const items = await fetchRssItems(feed.url, {
       family: "official",
-      channel: "official-rss",
+      channel: "blogs",
+      site: feed.name,
       publisher: feed.org,
-      collection: feed.name,
       language: feed.language,
       originType: "direct-official"
     }, OFFICIAL_RSS_ITEMS_PER_FEED);
@@ -319,8 +319,8 @@ async function fetchRssItems(url, defaults, limit) {
     score: null,
     family: defaults.family,
     channel: defaults.channel,
-    publisher: defaults.publisher,
-    collection: defaults.collection,
+    site: defaults.site,
+    publisher: readXmlTag(block, "dc:creator") || readXmlTag(block, "author") || defaults.publisher,
     topic: splitTags(readXmlTag(block, "category")),
     language: defaults.language,
     originType: defaults.originType
@@ -387,9 +387,9 @@ async function fetchOneXgoFeed(feed) {
       summary,
       score: null,
       family: officialItem ? "official" : "community",
-      channel: officialItem ? "official-social" : "community-social",
+      channel: "x",
+      site: "X/Twitter",
       publisher: feed.name,
-      collection: feed.groupName,
       topic: [],
       language: detectLanguage([title, summary]),
       originType: officialItem ? "official-social" : "community-post"
@@ -465,8 +465,12 @@ function normalizeItem(input) {
   const publishedAt = parseDate(base.publishedAt) || new Date().toISOString();
   const family = normalizeFamily(base.family);
   const channel = normalizeChannel(base.channel, family, url);
-  const publisher = cleanText(base.publisher) || fallbackPublisher(family, channel, base.collection);
-  const collection = cleanText(base.collection) || fallbackCollection(family, publisher);
+  const site = channel === "x"
+    ? "X/Twitter"
+    : family === "curated"
+      ? BESTBLOGS_SITE
+      : cleanText(base.site) || cleanText(base.collection) || fallbackSite(family, channel, base.publisher);
+  const publisher = cleanText(base.publisher) || fallbackPublisher(family, channel, site);
   const summary = trim(cleanText(base.summary), 360);
   const language = normalizeLanguage(base.language) || detectLanguage([title, summary]) || null;
   const score = family === "curated" ? normalizeScore(base.score) : null;
@@ -480,9 +484,9 @@ function normalizeItem(input) {
     score,
     family,
     channel,
+    site,
     publisher,
-    collection,
-    topic: normalizeTopics(base.topic || [], { publisher, collection }),
+    topic: normalizeTopics(base.topic || [], { publisher, site }),
     language,
     originType: normalizeOriginType(base.originType, family, channel)
   };
@@ -508,8 +512,8 @@ function migrateLegacyItem(input) {
       score: input.score,
       family,
       channel,
+      site: BESTBLOGS_SITE,
       publisher: extractBestBlogsSource(summary) || cleanText(input.sourceName) || "BestBlogs",
-      collection: cleanText(input.collection) || cleanText(input.siteName) || BESTBLOGS_COLLECTION,
       topic: input.topic || input.tags || [],
       language: input.language || extractBestBlogsLanguage(summary),
       originType: input.originType || "curated-secondary"
@@ -526,8 +530,8 @@ function migrateLegacyItem(input) {
       score: input.score,
       family,
       channel,
-      publisher: cleanText(input.publisher) || cleanText(input.sourceName) || cleanText(input.siteName) || "ai-news-aggregator",
-      collection: cleanText(input.collection) || cleanText(input.siteName) || AI_NEWS_COLLECTION_FALLBACK,
+      site: cleanText(input.site) || cleanText(input.collection) || cleanText(input.siteName) || cleanText(input.sourceName) || AI_NEWS_SITE_FALLBACK,
+      publisher: cleanText(input.publisher) || cleanText(input.sourceName) || cleanText(input.siteName) || AI_NEWS_SITE_FALLBACK,
       topic: input.topic || input.tags || [],
       language: input.language,
       originType: input.originType || "aggregated-hotlist"
@@ -535,13 +539,12 @@ function migrateLegacyItem(input) {
   }
 
   if (family === "official") {
-    const officialPublisher = channel === "official-rss"
+    const officialPublisher = channel === "blogs"
       ? cleanText(input.publisher) || cleanText(input.siteName) || cleanText(input.sourceName)
       : cleanText(input.publisher) || cleanText(input.sourceName) || cleanText(input.siteName);
-    const officialCollection = cleanText(input.collection)
-      || (channel === "official-rss"
-        ? cleanText(input.sourceName) || cleanText(input.siteName)
-        : legacySocialCollection(input));
+    const officialSite = channel === "blogs"
+      ? cleanText(input.site) || cleanText(input.collection) || cleanText(input.sourceName) || cleanText(input.siteName)
+      : "X/Twitter";
     return {
       id: input.id,
       title,
@@ -552,7 +555,7 @@ function migrateLegacyItem(input) {
       family,
       channel,
       publisher: officialPublisher,
-      collection: officialCollection,
+      site: officialSite,
       topic: input.topic || input.tags || [],
       language: input.language,
       originType: input.originType || normalizeOriginType(null, family, channel)
@@ -568,8 +571,8 @@ function migrateLegacyItem(input) {
     score: input.score,
     family: "community",
     channel,
-    publisher: cleanText(input.publisher) || cleanText(input.sourceName) || "X/Twitter",
-    collection: cleanText(input.collection) || cleanText(input.siteName) || "X/Twitter",
+    site: "X/Twitter",
+    publisher: cleanText(input.publisher) || cleanText(input.sourceName) || cleanText(input.siteName) || "X/Twitter",
     topic: input.topic || input.tags || [],
     language: input.language,
     originType: input.originType || "community-post"
@@ -597,11 +600,13 @@ function normalizeFamily(value) {
 
 function normalizeChannel(value, family, url) {
   const raw = String(value || "").trim();
-  const canonical = raw === "official-x"
-    ? "official-social"
-    : raw === "xgo"
-      ? "community-social"
-      : raw;
+  const canonical = ["official-x", "official-social", "community-social", "xgo", "x", "X/Twitter"].includes(raw)
+    ? "x"
+    : ["curated-rss", "official-rss", "blogs"].includes(raw)
+      ? "blogs"
+      : ["aggregator-json", "aggregator"].includes(raw)
+        ? "aggregator"
+        : raw;
   const channel = canonical || defaultChannelForFamily(family, url);
   if (!isValidFamilyChannel(family, channel)) {
     throw new Error(`Invalid family/channel pairing: ${family}/${channel}`);
@@ -610,10 +615,10 @@ function normalizeChannel(value, family, url) {
 }
 
 function defaultChannelForFamily(family, url) {
-  if (family === "curated") return "curated-rss";
-  if (family === "aggregator") return "aggregator-json";
-  if (family === "official") return isXPostUrl(url) ? "official-social" : "official-rss";
-  return "community-social";
+  if (family === "curated") return "blogs";
+  if (family === "aggregator") return "aggregator";
+  if (family === "official") return isXPostUrl(url) ? "x" : "blogs";
+  return "x";
 }
 
 function isValidFamilyChannel(family, channel) {
@@ -625,28 +630,29 @@ function normalizeOriginType(value, family, channel) {
   if (raw) return raw;
   if (family === "curated") return "curated-secondary";
   if (family === "aggregator") return "aggregated-hotlist";
-  if (family === "official") return channel === "official-social" ? "official-social" : "direct-official";
+  if (family === "official") return channel === "x" ? "official-social" : "direct-official";
   return "community-post";
 }
 
-function fallbackPublisher(family, channel, collection) {
-  if (family === "official" && channel === "official-rss") return cleanText(collection) || "Official";
-  if (family === "aggregator") return "ai-news-aggregator";
+function fallbackPublisher(family, channel, site) {
+  if (family === "official" && channel === "blogs") return cleanText(site) || "Official";
+  if (family === "aggregator") return cleanText(site) || AI_NEWS_SITE_FALLBACK;
   if (family === "curated") return "BestBlogs";
   if (family === "official") return "Official";
   return "X/Twitter";
 }
 
-function fallbackCollection(family, publisher) {
-  if (family === "curated") return BESTBLOGS_COLLECTION;
-  if (family === "aggregator") return AI_NEWS_COLLECTION_FALLBACK;
-  return publisher;
+function fallbackSite(family, channel, publisher) {
+  if (family === "curated") return BESTBLOGS_SITE;
+  if (family === "aggregator") return cleanText(publisher) || AI_NEWS_SITE_FALLBACK;
+  if (channel === "x") return "X/Twitter";
+  return cleanText(publisher) || "Official";
 }
 
-function normalizeTopics(values, { publisher, collection }) {
+function normalizeTopics(values, { publisher, site }) {
   const blocked = new Set([
     normalizeTopicKey(publisher),
-    normalizeTopicKey(collection),
+    normalizeTopicKey(site),
     normalizeTopicKey("official"),
     normalizeTopicKey("x/twitter"),
     normalizeTopicKey("rss"),
@@ -720,7 +726,7 @@ function mergeItems(a, b) {
   const older = newer === b ? a : b;
   return {
     ...newer,
-    topic: normalizeTopics([...a.topic, ...b.topic], { publisher: newer.publisher, collection: newer.collection }),
+    topic: normalizeTopics([...a.topic, ...b.topic], { publisher: newer.publisher, site: newer.site }),
     summary: newer.summary || older.summary,
     score: newer.score ?? older.score,
     language: newer.language || older.language
@@ -857,16 +863,6 @@ function extractLabeledMeta(value, label, nextLabels) {
   const regex = new RegExp(`${label}\\s*[：:]\\s*(.+?)(?=\\s+(?:${boundary})\\s*[：:]|$)`, "i");
   const match = text.match(regex);
   return match ? cleanText(match[1]) : "";
-}
-
-function legacySocialCollection(input) {
-  const sourceName = cleanText(input.sourceName);
-  const siteName = cleanText(input.siteName);
-  const tags = Array.isArray(input.tags) ? input.tags : [];
-  const candidate = tags
-    .map((tag) => cleanText(tag))
-    .find((tag) => tag && ![sourceName, siteName, "X/Twitter", "Official", "OPML RSS"].includes(tag) && !/@[A-Za-z0-9_]+/.test(tag));
-  return candidate || siteName || sourceName || "X/Twitter";
 }
 
 function hasHan(value) {

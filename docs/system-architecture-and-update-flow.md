@@ -100,7 +100,7 @@ graph TD
   - 抓取外部 RSS / JSON / xgo feed
   - 标准化成统一 canonical item 结构
   - 去重
-  - 归一到 `family/channel/publisher/collection/topic/language/originType` taxonomy
+  - 归一到 `family/channel/site/publisher/topic/language/originType` taxonomy
   - 失败兜底（复用上一版数据并迁移到新 schema）
   - 输出 `briefing/data/items.json`
 
@@ -158,8 +158,8 @@ graph LR
 3. **Official RSS**
    - 官方博客/新闻源（含 Hugging Face Blog）
 4. **SuYxh OPML 里的 xgo feeds**
-   - 一部分归 `official / official-social`
-   - 一部分归 `community / community-social`
+   - 一部分归 `official / x`
+   - 一部分归 `community / x`
 
 ### 4.2 中间处理
 
@@ -172,9 +172,9 @@ graph LR
 - `summary`
 - `score`
 - `family`（`curated | official | community | aggregator`）
-- `channel`（例如 `curated-rss` / `official-rss` / `official-social` / `community-social` / `aggregator-json`）
+- `channel`（仅 `blogs` / `x` / `aggregator`）
+- `site`（始终存在、对人可读，例如 `BestBlogs` / `Hugging Face Blog` / `X/Twitter` / `TechURLs`）
 - `publisher`
-- `collection`
 - `topic`
 - `language`
 - `originType`
@@ -316,7 +316,9 @@ node scripts/update-data.mjs
 当前主 taxonomy 是：
 
 - `family`：`curated | aggregator | community | official`
-- `channel`：`curated-rss | aggregator-json | community-social | official-rss | official-social`
+- `channel`：`blogs | x | aggregator`
+- `site`：保留可见站点概念；BestBlogs 条目统一写 `site=BestBlogs`，官方博客保留各 feed/站点名，X 条目统一写 `site=X/Twitter`
+- `publisher`：作者 / 账号 / 组织 / 出版物
 
 ---
 
@@ -335,13 +337,13 @@ node scripts/update-data.mjs
 
 特别是 `official` 还会细分检查：
 
-- `official-rss`
-- `official-social`
+- `blogs`
+- `x`
 
 避免出现：
 
-- 只剩官方 RSS，没有官方社交源
-- 或只剩官方社交源，没有官方 RSS
+- 只剩官方 blogs，没有官方 X 源
+- 或只剩官方 X 源，没有官方 blogs
 
 ---
 
@@ -413,22 +415,22 @@ node scripts/check.mjs
 #### 官方源完整性
 
 - `official` 总条数达标
-- `official-rss` 条数达标
-- `official-rss` feed 数量达标
-- `official-social` 条数达标
-- `Hugging Face Blog` 不能从 source 清单或 `official-rss` 集合里静默消失
+- `official + blogs` 条数达标
+- `official + blogs` 站点数量达标
+- `official + x` 条数达标
+- `Hugging Face Blog` 不能从 source 清单或官方 blog 站点集合里静默消失
 
 #### family/channel 配对
 
-- `curated` 只能配 `curated-rss`
-- `aggregator` 只能配 `aggregator-json`
-- `community` 只能配 `community-social`
-- `official` 只能配 `official-rss` / `official-social`
+- `curated` 只能配 `blogs`
+- `aggregator` 只能配 `aggregator`
+- `community` 只能配 `x`
+- `official` 只能配 `blogs` / `x`
 
 #### 安全性
 
 - URL 必须是 `http/https`
-- `official-social` 的链接必须匹配它自己的官方 handle
+- `official + x` 的链接必须匹配它自己的官方 handle
 
 #### 时间合理性
 

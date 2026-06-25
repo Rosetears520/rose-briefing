@@ -26,16 +26,23 @@ GitHub Pages 静态 AI 资讯搜索站。初版目标是把公开资讯源聚合
 
 采集脚本会按 URL/标题去重，按时间倒序保留最多 7000 条。页面默认只渲染匹配结果的前 800 条，避免一次性渲染过多卡片导致浏览器变慢；搜索和筛选仍会作用于全部数据。
 
-当前发布的 `items.json` item 采用统一 canonical taxonomy 字段：
+当前发布的 `items.json` item 采用统一 canonical 字段，发布契约以 `channel / site / publisher` 语义为主：
 
-- `id,title,url,publishedAt,summary,score`
+- `id,title,url,publishedAt,summary,score,family,channel,site,publisher,topic,language,originType`
 - `family`：`curated | official | community | aggregator`
-- `channel`：当前使用 `curated-rss | official-rss | official-social | community-social | aggregator-json`
-- `publisher`：实际组织 / 账号 / 出版物
-- `collection`：抓取到的 feed / bundle / container
+- `channel`：粗粒度渠道，仅使用 `blogs | x | aggregator`
+- `site`：始终存在、对人可读；例如 `BestBlogs`、`Hugging Face Blog`、`X/Twitter`、`TechURLs`
+- `publisher`：实际作者 / 账号 / 组织 / 出版物
 - `topic`：归一化后的多值主题标签数组
 - `language`：字符串或 `null`
 - `originType`：例如 `curated-secondary | direct-official | official-social | aggregated-hotlist | community-post`
+
+当前映射约定：
+
+- BestBlogs：`channel=blogs`，`site=BestBlogs`，`publisher` 从 `Source/Author` 解析
+- 官方 RSS / 博客：`channel=blogs`，`site` 使用 feed 或站点名（保留 `Hugging Face Blog` 等可见站点概念），`publisher` 使用组织或作者
+- X/Twitter：`channel=x`，`site=X/Twitter`，`publisher` 使用账号
+- ai-news-aggregator：`channel=aggregator`，`site` 使用实际 `site_name/site_id`，`publisher` 使用 source/publication
 
 ## 本地运行
 

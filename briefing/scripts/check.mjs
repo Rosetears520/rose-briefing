@@ -25,25 +25,25 @@ const ITEM_KEYS = [
   "score",
   "family",
   "channel",
+  "site",
   "publisher",
-  "collection",
   "topic",
   "language",
   "originType"
 ];
 
-const LEGACY_KEYS = ["sourceFamily", "sourceName", "siteName", "tags"];
+const LEGACY_KEYS = ["collection", "sourceFamily", "sourceName", "siteName", "tags"];
 const REQUIRED_FAMILIES = ["curated", "aggregator", "community", "official"];
 const ALLOWED_FAMILIES = new Set(REQUIRED_FAMILIES);
-const ALLOWED_CHANNELS = new Set(["curated-rss", "official-rss", "official-social", "community-social", "aggregator-json"]);
+const ALLOWED_CHANNELS = new Set(["blogs", "x", "aggregator"]);
 const ALLOWED_CHANNELS_BY_FAMILY = new Map([
-  ["curated", new Set(["curated-rss"])],
-  ["aggregator", new Set(["aggregator-json"])],
-  ["community", new Set(["community-social"])],
-  ["official", new Set(["official-rss", "official-social"])]
+  ["curated", new Set(["blogs"])],
+  ["aggregator", new Set(["aggregator"])],
+  ["community", new Set(["x"])],
+  ["official", new Set(["blogs", "x"])]
 ]);
 const REQUIRED_SOURCE_NAMES = ["BestBlogs", "ai-news-aggregator", "X/Twitter via SuYxh OPML", "Hugging Face Blog"];
-const REQUIRED_OFFICIAL_RSS_COLLECTIONS = ["Hugging Face Blog"];
+const REQUIRED_OFFICIAL_BLOG_SITES = ["Hugging Face Blog"];
 
 for (const relativePath of REQUIRED_FILES) {
   await access(path.join(rootDir, relativePath));
@@ -67,32 +67,40 @@ for (const expected of REQUIRED_FAMILIES) {
 
 const communityItems = payload.items.filter((item) => item.family === "community");
 if (communityItems.length < 50) throw new Error(`Expected community items, got only ${communityItems.length}`);
-
-const officialItems = payload.items.filter((item) => item.family === "official");
-if (officialItems.length < 50) throw new Error(`Expected official items, got only ${officialItems.length}`);
-const officialRssItems = officialItems.filter((item) => item.channel === "official-rss");
-if (officialRssItems.length < 20) throw new Error(`Expected official RSS items, got only ${officialRssItems.length}`);
-const officialRssFeeds = new Set(officialRssItems.map((item) => item.collection).filter(Boolean));
-if (officialRssFeeds.size < 3) throw new Error(`Expected at least 3 official RSS feeds, got ${officialRssFeeds.size}`);
-for (const expected of REQUIRED_OFFICIAL_RSS_COLLECTIONS) {
-  if (!officialRssFeeds.has(expected)) throw new Error(`Missing required official RSS collection: ${expected}`);
-}
-const officialSocialItems = officialItems.filter((item) => item.channel === "official-social");
-if (officialSocialItems.length < 50) throw new Error(`Expected official social items, got only ${officialSocialItems.length}`);
-for (const item of officialSocialItems) {
-  if (!isOfficialSocialPostUrl(item.url, item.publisher)) {
-    throw new Error(`Official social item URL does not match publisher handle: ${item.publisher} -> ${item.url}`);
+for (const item of communityItems) {
+  if (item.channel !== "x" || item.site !== "X/Twitter") {
+    throw new Error(`Community item must be an X item with site X/Twitter: ${item.title}`);
   }
 }
 
-const aggregatorCollections = new Set(
+const officialItems = payload.items.filter((item) => item.family === "official");
+if (officialItems.length < 50) throw new Error(`Expected official items, got only ${officialItems.length}`);
+const officialBlogItems = officialItems.filter((item) => item.channel === "blogs");
+if (officialBlogItems.length < 20) throw new Error(`Expected official blog items, got only ${officialBlogItems.length}`);
+const officialBlogSites = new Set(officialBlogItems.map((item) => item.site).filter(Boolean));
+if (officialBlogSites.size < 3) throw new Error(`Expected at least 3 official blog sites, got ${officialBlogSites.size}`);
+for (const expected of REQUIRED_OFFICIAL_BLOG_SITES) {
+  if (!officialBlogSites.has(expected)) throw new Error(`Missing required official blog site: ${expected}`);
+}
+const officialXItems = officialItems.filter((item) => item.channel === "x");
+if (officialXItems.length < 50) throw new Error(`Expected official X items, got only ${officialXItems.length}`);
+for (const item of officialXItems) {
+  if (item.site !== "X/Twitter") {
+    throw new Error(`Official X item must use site X/Twitter: ${item.title}`);
+  }
+  if (!isOfficialSocialPostUrl(item.url, item.publisher)) {
+    throw new Error(`Official X item URL does not match publisher handle: ${item.publisher} -> ${item.url}`);
+  }
+}
+
+const aggregatorSites = new Set(
   payload.items
     .filter((item) => item.family === "aggregator")
-    .map((item) => item.collection)
+    .map((item) => item.site)
     .filter(Boolean)
 );
-if (aggregatorCollections.size < 8) {
-  throw new Error(`Expected broad ai-news-aggregator platform coverage, got ${aggregatorCollections.size}`);
+if (aggregatorSites.size < 8) {
+  throw new Error(`Expected broad ai-news-aggregator platform coverage, got ${aggregatorSites.size}`);
 }
 
 const generatedAt = new Date(payload.generatedAt).getTime();
@@ -135,7 +143,7 @@ function assertItemShape(item) {
     }
   }
 
-  if (!item.id || !item.title || !item.url || !item.family || !item.channel || !item.publisher || !item.collection || !item.originType) {
+  if (!item.id || !item.title || !item.url || !item.family || !item.channel || !item.site || !item.publisher || !item.originType) {
     throw new Error(`Invalid item shape: ${JSON.stringify(item)}`);
   }
   if (!ALLOWED_FAMILIES.has(item.family)) {
@@ -147,6 +155,9 @@ function assertItemShape(item) {
   const allowedChannels = ALLOWED_CHANNELS_BY_FAMILY.get(item.family);
   if (!allowedChannels?.has(item.channel)) {
     throw new Error(`Invalid family/channel pairing: ${item.family}/${item.channel}`);
+  }
+  if (typeof item.site !== "string") {
+    throw new Error(`site must be a string: ${JSON.stringify(item)}`);
   }
   if (!Array.isArray(item.topic)) {
     throw new Error(`topic must be an array: ${JSON.stringify(item)}`);
