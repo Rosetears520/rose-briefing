@@ -26,9 +26,12 @@ if (payload.items.length === 0) throw new Error("data/items.json has no items");
 if (payload.items.length < 1000) throw new Error(`Expected expanded data set, got only ${payload.items.length} items`);
 
 const sourceFamilies = new Set(payload.items.map((item) => item.sourceFamily));
-for (const expected of ["BestBlogs", "ai-news-aggregator"]) {
+for (const expected of ["BestBlogs", "ai-news-aggregator", "X/Twitter"]) {
   if (!sourceFamilies.has(expected)) throw new Error(`Missing expected source family: ${expected}`);
 }
+
+const xItems = payload.items.filter((item) => item.sourceFamily === "X/Twitter");
+if (xItems.length < 50) throw new Error(`Expected X/Twitter items, got only ${xItems.length}`);
 
 const aggregatorPlatforms = new Set(
   payload.items

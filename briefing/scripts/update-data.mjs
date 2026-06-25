@@ -8,9 +8,17 @@ const rootDir = path.resolve(__dirname, "..");
 const dataDir = path.join(rootDir, "data");
 const outputPath = path.join(dataDir, "items.json");
 
-const MAX_ITEMS = 5500;
+const MAX_ITEMS = 7000;
+const X_ITEMS_PER_FEED = 20;
+const X_FEED_CONCURRENCY = 8;
+const MIN_ITEMS_BY_FAMILY = {
+  BestBlogs: 1,
+  "ai-news-aggregator": 1000,
+  "X/Twitter": 50
+};
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
 const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
+const SUYXH_OPML_FEEDS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json";
 
 const seedItems = [
   {
@@ -45,7 +53,8 @@ async function main() {
   const warnings = [];
   const existingItems = await readExistingItems();
   const batches = await Promise.allSettled([fetchBestBlogs(), fetchAiNewsAggregator()]);
-  const items = [];
+  batches.push(await settle(fetchXgoFeeds()));
+  let items = [];
 
   for (const result of batches) {
     if (result.status === "fulfilled") {
@@ -56,12 +65,15 @@ async function main() {
     }
   }
 
-  for (const family of ["BestBlogs", "ai-news-aggregator"]) {
-    if (!items.some((item) => item.sourceFamily === family)) {
+  for (const family of requiredSourceFamilies()) {
+    const minimum = MIN_ITEMS_BY_FAMILY[family] ?? 1;
+    const currentCount = items.filter((item) => item.sourceFamily === family).length;
+    if (currentCount < minimum) {
       const fallbackItems = existingItems.filter((item) => item.sourceFamily === family);
-      if (fallbackItems.length > 0) {
+      if (fallbackItems.length >= minimum) {
+        items = items.filter((item) => item.sourceFamily !== family);
         items.push(...fallbackItems);
-        warnings.push(`${family} fetch failed; reused ${fallbackItems.length} existing items`);
+        warnings.push(`${family} fetch returned ${currentCount} items; reused ${fallbackItems.length} existing items`);
       }
     }
   }
@@ -82,7 +94,8 @@ async function main() {
     maxItems: MAX_ITEMS,
     sources: [
       { name: "BestBlogs", type: "rss", url: BESTBLOGS_RSS },
-      { name: "ai-news-aggregator", type: "json", url: AI_NEWS_JSON }
+      { name: "ai-news-aggregator", type: "json", url: AI_NEWS_JSON },
+      { name: "X/Twitter via SuYxh OPML", type: "rss", url: SUYXH_OPML_FEEDS_JSON }
     ],
     warnings,
     items: normalized
@@ -107,10 +120,27 @@ async function readExistingItems() {
 
 function assertRequiredSources(items) {
   const families = new Set(items.map((item) => item.sourceFamily));
-  for (const expected of ["BestBlogs", "ai-news-aggregator"]) {
+  for (const expected of requiredSourceFamilies()) {
     if (!families.has(expected)) {
       throw new Error(`Missing required source family ${expected}; preserving existing data instead of publishing partial data.`);
     }
+    const count = items.filter((item) => item.sourceFamily === expected).length;
+    const minimum = MIN_ITEMS_BY_FAMILY[expected] ?? 1;
+    if (count < minimum) {
+      throw new Error(`Source family ${expected} has only ${count} items; preserving existing data instead of publishing partial data.`);
+    }
+  }
+}
+
+function requiredSourceFamilies() {
+  return ["BestBlogs", "ai-news-aggregator", "X/Twitter"];
+}
+
+async function settle(promise) {
+  try {
+    return { status: "fulfilled", value: await promise };
+  } catch (error) {
+    return { status: "rejected", reason: error };
   }
 }
 
@@ -164,6 +194,84 @@ async function fetchAiNewsAggregator() {
     warnings.push(`ai-news-aggregator latest-7d: ${rawItems.length} raw items, ${data.site_count ?? "?"} platforms, ${data.source_count ?? "?"} sources`);
   }
   return { items, warnings };
+}
+
+async function fetchXgoFeeds() {
+  const groups = await fetchJson(SUYXH_OPML_FEEDS_JSON);
+  const feeds = flattenXgoFeeds(groups);
+  const feedResults = await mapWithConcurrency(feeds, X_FEED_CONCURRENCY, fetchOneXgoFeed);
+  const items = [];
+  const failures = [];
+
+  for (const result of feedResults) {
+    if (result.status === "fulfilled") {
+      items.push(...result.value.items);
+    } else {
+      failures.push(result.reason?.message ?? String(result.reason));
+    }
+  }
+
+  const warnings = [`X/Twitter via xgo: ${items.length} items from ${feeds.length - failures.length}/${feeds.length} feeds`];
+  if (failures.length > 0) warnings.push(`X/Twitter failed feeds: ${failures.length}`);
+  return { items, warnings };
+}
+
+function flattenXgoFeeds(groups) {
+  if (!Array.isArray(groups)) return [];
+  return groups.flatMap((group) => (group.feeds || [])
+    .filter((feed) => isSafeXgoFeedUrl(feed.url))
+    .map((feed) => ({
+      groupName: group.name || "X/Twitter",
+      name: feed.name || "X/Twitter",
+      url: feed.url
+    })));
+}
+
+function isSafeXgoFeedUrl(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.hostname === "api.xgo.ing";
+  } catch {
+    return false;
+  }
+}
+
+async function fetchOneXgoFeed(feed) {
+  const xml = await fetchText(feed.url);
+  const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
+  const items = itemBlocks.slice(0, X_ITEMS_PER_FEED).map((block, index) => normalizeItem({
+    id: readXmlTag(block, "guid") || `xgo-${hash(`${feed.url}-${index}`)}`,
+    title: readXmlTag(block, "title"),
+    url: readXmlTag(block, "link"),
+    sourceFamily: "X/Twitter",
+    sourceName: feed.name,
+    siteName: feed.groupName,
+    publishedAt: readXmlTag(block, "pubDate") || readXmlTag(block, "dc:date"),
+    summary: readXmlTag(block, "description"),
+    tags: [feed.groupName, feed.name, "X/Twitter"],
+    score: null
+  })).filter(Boolean);
+
+  return { items };
+}
+
+async function mapWithConcurrency(values, concurrency, mapper) {
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      try {
+        results[currentIndex] = { status: "fulfilled", value: await mapper(values[currentIndex]) };
+      } catch (error) {
+        results[currentIndex] = { status: "rejected", reason: error };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function normalizeAiNewsDate(item) {
