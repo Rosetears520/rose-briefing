@@ -248,14 +248,12 @@ sequenceDiagram
 
 ```yaml
 schedule:
-  - cron: "0 0,4,8,12,16,20 * * *"
-  - cron: "20 1,5,9,13,17,21 * * *"
-  - cron: "40 2,6,10,14,18,22 * * *"
+  - cron: "15 * * * *"
 ```
 
 即：
 
-- **每 80 分钟自动运行一次**（用 3 条 UTC cron 交错实现）
+- **每小时自动运行一次**（固定在每小时 `:15`，避开整点高拥堵时段）
 
 ---
 
@@ -485,7 +483,7 @@ Pages 地址：
 
 自动更新链路就是：
 
-> 定时 cron（每 80 分钟） → Actions 跑 update/build/check → 上传 artifact → Pages 部署 → 浏览器打开即看到最新数据
+> 定时 cron（每小时 `:15`） → Actions 跑 update/build/check → 上传 artifact → Pages 部署 → 浏览器打开即看到最新数据
 
 ---
 
@@ -512,7 +510,7 @@ Pages 地址：
 
 截至当前实现：
 
-- 自动更新：**每 80 分钟**
+- 自动更新：**每小时 `:15`**
 - 静态发布目录：`briefing/dist`
 - 主数据文件：`briefing/data/items.json`
 - 线上托管：**GitHub Pages**
