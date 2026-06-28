@@ -39,7 +39,7 @@ body {
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.01em; }
 .brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
 .brand .sub { color: var(--faint); font-weight: 500; font-size: 0.85rem; }
-.topbar nav { display: flex; gap: 22px; color: var(--muted); font-size: 0.9rem; }
+.topbar nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px 22px; color: var(--muted); font-size: 0.9rem; }
 .topbar nav a { color: var(--muted); text-decoration: none; }
 .topbar nav a:hover { color: var(--ink); }
 
@@ -295,6 +295,8 @@ body {
 
 @media (max-width: 720px) {
   .wrap { padding: 0 18px; }
+  .topbar { align-items: flex-start; gap: 18px; }
+  .topbar nav { gap: 10px 16px; }
   .bar { margin: 0 -18px; padding: 14px 18px 12px; }
   .item { grid-template-columns: 1fr; gap: 10px; }
   .item .side { text-align: left; }
