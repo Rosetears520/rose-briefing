@@ -34,6 +34,17 @@ const ALLOWED_CHANNELS_BY_FAMILY = new Map([
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
 const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
 const SUYXH_OPML_FEEDS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json";
+const OFFICIAL_XGO_FEEDS = [
+  {
+    groupName: "AI Companies",
+    name: "Tibo Sottiaux(@thsottiaux)",
+    url: "https://api.xgo.ing/rss/user/1953337039510003712",
+    profileUrl: "https://x.com/thsottiaux",
+    fallbackTitle: "Tibo Sottiaux（Codex 负责人）X 官方账号",
+    fallbackSummary: "Tibo Sottiaux 是 Codex 负责人；该 X 账号作为 Codex 相关官方观察源收录。",
+    topic: ["codex", "openai"]
+  }
+];
 const BESTBLOGS_SITE = "BestBlogs";
 const AI_NEWS_SITE_FALLBACK = "ai-news-aggregator";
 const OFFICIAL_RSS_FEEDS = [
@@ -129,6 +140,7 @@ async function main() {
       { name: "BestBlogs", type: "rss", url: BESTBLOGS_RSS },
       { name: "ai-news-aggregator", type: "json", url: AI_NEWS_JSON },
       ...OFFICIAL_RSS_FEEDS.map((feed) => ({ name: feed.name, type: "rss", url: feed.url })),
+      ...OFFICIAL_XGO_FEEDS.map((feed) => ({ name: feed.name, type: "rss", url: feed.url })),
       { name: "X/Twitter via SuYxh OPML", type: "rss", url: SUYXH_OPML_FEEDS_JSON }
     ],
     warnings,
@@ -330,7 +342,7 @@ async function fetchRssItems(url, defaults, limit) {
 
 async function fetchXgoFeeds() {
   const groups = await fetchJson(SUYXH_OPML_FEEDS_JSON);
-  const feeds = flattenXgoFeeds(groups);
+  const feeds = [...flattenXgoFeeds(groups), ...OFFICIAL_XGO_FEEDS];
   const feedResults = await mapWithConcurrency(feeds, X_FEED_CONCURRENCY, fetchOneXgoFeed);
   const items = [];
   const failures = [];
@@ -343,11 +355,35 @@ async function fetchXgoFeeds() {
     }
   }
 
+  items.push(...officialXProfileFallbackItems(items));
+
   const officialCount = items.filter((item) => item.family === "official").length;
   const communityCount = items.filter((item) => item.family === "community").length;
   const warnings = [`xgo feeds: ${officialCount} official items, ${communityCount} community items from ${feeds.length - failures.length}/${feeds.length} feeds`];
   if (failures.length > 0) warnings.push(`X/Twitter failed feeds: ${failures.length}`);
   return { items, warnings };
+}
+
+function officialXProfileFallbackItems(items) {
+  return OFFICIAL_XGO_FEEDS
+    .filter((feed) => feed.profileUrl)
+    .filter((feed) => !items.some((item) => item.family === "official" && item.channel === "x" && item.publisher === feed.name))
+    .map((feed) => normalizeItem({
+      id: `official-x-profile-${officialHandle(feed)}`,
+      title: feed.fallbackTitle || `${feed.name} X 官方账号`,
+      url: feed.profileUrl,
+      publishedAt: new Date().toISOString(),
+      summary: feed.fallbackSummary || `${feed.name} 官方 X 账号。`,
+      score: null,
+      family: "official",
+      channel: "x",
+      site: "X/Twitter",
+      publisher: feed.name,
+      topic: feed.topic || [],
+      language: detectLanguage([feed.fallbackTitle, feed.fallbackSummary]),
+      originType: "official-social"
+    }))
+    .filter(Boolean);
 }
 
 function flattenXgoFeeds(groups) {
