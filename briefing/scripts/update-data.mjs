@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,15 +35,12 @@ const ALLOWED_CHANNELS_BY_FAMILY = new Map([
 const BESTBLOGS_RSS = "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=80";
 const AI_NEWS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/latest-7d.json";
 const SUYXH_OPML_FEEDS_JSON = "https://raw.githubusercontent.com/SuYxh/ai-news-aggregator/main/data/opml-feeds.json";
-const OFFICIAL_XGO_FEEDS = [
+const OFFICIAL_X_FEEDS = [
   {
     groupName: "AI Companies",
     name: "Tibo Sottiaux(@thsottiaux)",
-    url: "https://api.xgo.ing/rss/user/1953337039510003712",
-    profileUrl: "https://x.com/thsottiaux",
-    fallbackTitle: "Tibo Sottiaux（Codex 负责人）X 官方账号",
-    fallbackSummary: "Tibo Sottiaux 是 Codex 负责人；该 X 账号作为 Codex 相关官方观察源收录。",
-    topic: ["codex", "openai"]
+    url: "https://nitter.net/thsottiaux/rss",
+    linkHost: "x.com"
   }
 ];
 const BESTBLOGS_SITE = "BestBlogs";
@@ -140,7 +138,7 @@ async function main() {
       { name: "BestBlogs", type: "rss", url: BESTBLOGS_RSS },
       { name: "ai-news-aggregator", type: "json", url: AI_NEWS_JSON },
       ...OFFICIAL_RSS_FEEDS.map((feed) => ({ name: feed.name, type: "rss", url: feed.url })),
-      ...OFFICIAL_XGO_FEEDS.map((feed) => ({ name: feed.name, type: "rss", url: feed.url })),
+      ...OFFICIAL_X_FEEDS.map((feed) => ({ name: feed.name, type: "rss", url: feed.url })),
       { name: "X/Twitter via SuYxh OPML", type: "rss", url: SUYXH_OPML_FEEDS_JSON }
     ],
     warnings,
@@ -342,7 +340,7 @@ async function fetchRssItems(url, defaults, limit) {
 
 async function fetchXgoFeeds() {
   const groups = await fetchJson(SUYXH_OPML_FEEDS_JSON);
-  const feeds = [...flattenXgoFeeds(groups), ...OFFICIAL_XGO_FEEDS];
+  const feeds = [...flattenXgoFeeds(groups), ...OFFICIAL_X_FEEDS];
   const feedResults = await mapWithConcurrency(feeds, X_FEED_CONCURRENCY, fetchOneXgoFeed);
   const items = [];
   const failures = [];
@@ -355,35 +353,11 @@ async function fetchXgoFeeds() {
     }
   }
 
-  items.push(...officialXProfileFallbackItems(items));
-
   const officialCount = items.filter((item) => item.family === "official").length;
   const communityCount = items.filter((item) => item.family === "community").length;
   const warnings = [`xgo feeds: ${officialCount} official items, ${communityCount} community items from ${feeds.length - failures.length}/${feeds.length} feeds`];
   if (failures.length > 0) warnings.push(`X/Twitter failed feeds: ${failures.length}`);
   return { items, warnings };
-}
-
-function officialXProfileFallbackItems(items) {
-  return OFFICIAL_XGO_FEEDS
-    .filter((feed) => feed.profileUrl)
-    .filter((feed) => !items.some((item) => item.family === "official" && item.channel === "x" && item.publisher === feed.name))
-    .map((feed) => normalizeItem({
-      id: `official-x-profile-${officialHandle(feed)}`,
-      title: feed.fallbackTitle || `${feed.name} X 官方账号`,
-      url: feed.profileUrl,
-      publishedAt: new Date().toISOString(),
-      summary: feed.fallbackSummary || `${feed.name} 官方 X 账号。`,
-      score: null,
-      family: "official",
-      channel: "x",
-      site: "X/Twitter",
-      publisher: feed.name,
-      topic: feed.topic || [],
-      language: detectLanguage([feed.fallbackTitle, feed.fallbackSummary]),
-      originType: "official-social"
-    }))
-    .filter(Boolean);
 }
 
 function flattenXgoFeeds(groups) {
@@ -412,7 +386,7 @@ async function fetchOneXgoFeed(feed) {
   const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
   const official = isOfficialXgoFeed(feed);
   const items = itemBlocks.slice(0, X_ITEMS_PER_FEED).map((block, index) => {
-    const itemUrl = readXmlTag(block, "link");
+    const itemUrl = canonicalXItemUrl(feed, readXmlTag(block, "link"), readXmlTag(block, "guid"));
     const officialItem = official && isOfficialXgoItemUrl(feed, itemUrl);
     const title = readXmlTag(block, "title");
     const summary = readXmlTag(block, "description");
@@ -434,6 +408,24 @@ async function fetchOneXgoFeed(feed) {
   }).filter(Boolean);
 
   return { items };
+}
+
+function canonicalXItemUrl(feed, value, guid) {
+  if (feed.linkHost !== "x.com") return value;
+  const handle = officialHandle(feed);
+  const statusId = statusIdFromXLikeUrl(value) || cleanText(guid).match(/^\d+$/)?.[0];
+  return handle && statusId ? `https://x.com/${handle}/status/${statusId}` : value;
+}
+
+function statusIdFromXLikeUrl(value) {
+  try {
+    const parsed = new URL(decodeEntities(String(value)).trim());
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const statusIndex = parts.findIndex((part) => part.toLowerCase() === "status");
+    return statusIndex >= 0 ? parts[statusIndex + 1]?.match(/^\d+$/)?.[0] : "";
+  } catch {
+    return "";
+  }
 }
 
 function isOfficialXgoFeed(feed) {
@@ -784,13 +776,38 @@ async function fetchText(url) {
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { "user-agent": "rose-briefing/0.1" } });
     if (!response.ok) throw new Error(`${url} returned ${response.status}`);
-    const text = await response.text();
+    let text = await response.text();
+    if (!text) {
+      text = await fetchTextWithHttps(url);
+    }
     const byteLength = Buffer.byteLength(text, "utf8");
     if (byteLength > MAX_FETCH_BYTES) throw new Error(`${url} returned ${byteLength} bytes, above ${MAX_FETCH_BYTES}`);
     return text;
   } finally {
     clearTimeout(timer);
   }
+}
+
+function fetchTextWithHttps(url) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, { headers: { "user-agent": "rose-briefing/0.1" }, timeout: 30000 }, (response) => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        response.resume();
+        reject(new Error(`${url} returned ${response.statusCode}`));
+        return;
+      }
+      const chunks = [];
+      let byteLength = 0;
+      response.on("data", (chunk) => {
+        byteLength += chunk.length;
+        if (byteLength > MAX_FETCH_BYTES) request.destroy(new Error(`${url} returned above ${MAX_FETCH_BYTES} bytes`));
+        else chunks.push(chunk);
+      });
+      response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    });
+    request.on("timeout", () => request.destroy(new Error(`${url} timed out`)));
+    request.on("error", reject);
+  });
 }
 
 async function fetchJson(url) {
